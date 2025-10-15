@@ -1,0 +1,31 @@
+{
+  "name": "git-commit-files-lambda",
+  "version": "0.1.0",
+  "scripts": {
+    "clean": "rm -rf dist build",
+    "build": "npm run clean && rspack build"
+  },
+  "keywords": [
+    "AWS",
+    "Nest"
+  ],
+  "author": "Patricio Ascencio <patricio.ascencio@karibu.cl>",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@rspack/cli": "1.2.8",
+    "@rspack/core": "1.2.8",
+    "@types/aws-lambda": "^8.10.145",
+    "@types/node": "22.5.4",
+    "typescript": "5.5.4"
+  },
+  "dependencies": {
+    "@nestjs/common": "11.1.5",
+    "@nestjs/core": "11.1.5",
+    "@nestjs/config": "4.0.2",
+    "class-transformer": "0.5.1",
+    "class-validator": "0.14.2",
+    "nestjs-pino": "4.4.0",
+    "pino": "9.7.0",
+    "reflect-metadata": "0.2.2"
+  }
+}
