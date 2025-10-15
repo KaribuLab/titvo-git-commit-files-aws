@@ -24,7 +24,7 @@ dependency parameters {
   config_path = "${get_parent_terragrunt_dir()}/aws/parameter"
   mock_outputs = {
     parameters = {
-      "/tvo/security-scan/prod/infra//tvo/security-scan/local/infra/sqs/mcp/git-commit-files/input/queue_arn" = "arn:aws:sqs:us-east-1:000000000000:test-queue"
+      "/tvo/security-scan/prod/infra/sqs/mcp/git-commit-files/input/queue_arn" = "arn:aws:sqs:us-east-1:000000000000:test-queue"
     }
   }
 }
@@ -51,7 +51,7 @@ inputs = {
           "sqs:GetQueueAttributes",
           "sqs:ReceiveMessage",
         ],
-        "Resource" : dependency.parameters.outputs.parameters["${local.base_path}/infra/sqs/git-commit-files/queue_arn"]
+        "Resource" : dependency.parameters.outputs.parameters["${local.base_path}/infra/sqs/mcp/git-commit-files/queue_arn"]
       },
     ]
   })
@@ -60,7 +60,7 @@ inputs = {
     LOG_LEVEL = local.serverless.locals.stage != "prod" ? "debug" : "info"
   }
   event_sources_arn = [
-    dependency.parameters.outputs.parameters["${local.base_path}/infra//tvo/security-scan/local/infra/sqs/mcp/git-commit-files/input/queue_arn"]
+    dependency.parameters.outputs.parameters["${local.base_path}/infra/sqs/mcp/git-commit-files/input/queue_arn"]
   ]
   runtime       = "nodejs22.x"
   handler       = "src/entrypoint.handler"
