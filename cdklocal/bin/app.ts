@@ -22,6 +22,9 @@ async function isAppStackCompleted(cloudFormationClient: CloudFormationClient): 
 }
 
 (async () => {
+  if (!process.env.CDK_STACK_NAME) {
+    throw new Error('CDK_STACK_NAME is not set');
+  }
   const cloudFormationClient = new CloudFormationClient({
     region: 'us-east-1',
     endpoint: process.env.AWS_ENDPOINT_URL ?? 'http://localstack:4566',
@@ -31,7 +34,7 @@ async function isAppStackCompleted(cloudFormationClient: CloudFormationClient): 
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
   const app = new cdk.App();
-  new AppStack(app, 'McpGitCommitFilesStack', {
+  new AppStack(app, process.env.CDK_STACK_NAME as string, {
     /* If you don't specify 'env', this stack will be environment-agnostic.
      * Account/Region-dependent features and context lookups will not work,
      * but a single synthesized template can be deployed anywhere. */

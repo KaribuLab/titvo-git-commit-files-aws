@@ -54,5 +54,10 @@ export class AppStack extends cdk.Stack {
       stringValue: lambdaFunction.functionName,
       description: 'Nombre de la función Lambda de MCP Git Commit Files'
     });
+
+    new cdk.CfnOutput(this, 'CloudWatchLogGroupName', {
+      value: lambdaFunction.logGroup.logGroupName,
+      description: 'Nombre del grupo de logs de CloudWatch'
+    });
   }
 }
