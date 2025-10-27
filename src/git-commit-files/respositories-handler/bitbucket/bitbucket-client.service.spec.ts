@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { BitbucketClientService } from './bitbucket-client.service'
 import axios from 'axios'
-import { FileInfo } from './repo.client'
+import { FileInfo } from '../repo.client'
 
 jest.mock('axios')
 const mockedAxios = axios as jest.Mocked<typeof axios>

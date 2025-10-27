@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common'
 import axios from 'axios'
-import { RepoClient, FileInfo } from './repo.client'
+import { RepoClient, FileInfo } from '../repo.client'
 import { inspect } from 'util'
 
 @Injectable()

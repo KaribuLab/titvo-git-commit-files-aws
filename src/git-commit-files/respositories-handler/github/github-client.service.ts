@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common'
-import { RepoClient, FileInfo } from './repo.client'
+import { RepoClient, FileInfo } from '../repo.client'
 import { Octokit } from '@octokit/rest'
 import { ConfigService } from '@nestjs/config'
 

@@ -85,7 +85,7 @@ inputs = {
     BITBUCKET_APP_PASSWORD = "${dependency.parameters.outputs.parameters["${local.base_path}/infra/git/mcp/git-commit-files/bitbucket/app_password"]}"
     TITVO_EVENT_BUS_NAME            = dependency.parameters.outputs.parameters["${local.base_path}/infra/eventbridge/eventbus_name"]
     S3_BUCKET_NAME            = dependency.parameters.outputs.parameters["${local.base_path}/infra/s3/mcp/git-commit-files/bucket_name"]
-    MAX_CONCURRENT_UPLOADS    = dependency.parameters.outputs.parameters["${local.base_path}/config/mcp/git-commit-files/max_concurrent_uploads"] ?: "10"
+    MAX_CONCURRENT_UPLOADS    = dependency.parameters.outputs.parameters["${local.base_path}/config/mcp/git-commit-files/max_concurrent_uploads"]
   }
   event_sources_arn = [
     dependency.parameters.outputs.parameters["${local.base_path}/infra/sqs/mcp/git-commit-files/input/queue_arn"]

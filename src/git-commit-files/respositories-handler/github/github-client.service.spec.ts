@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { GitHubClientService } from './github-client.service'
 import { ConfigService } from '@nestjs/config'
-import { FileInfo } from './repo.client'
+import { FileInfo } from '../repo.client'
 
 // ==========================================
 // Mocks globales de Octokit

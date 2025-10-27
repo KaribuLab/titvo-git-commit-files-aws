@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common'
-import { BitbucketClientService } from './bitbucket-client.service'
-import { GitHubClientService } from './github-client.service'
+import { BitbucketClientService } from './bitbucket/bitbucket-client.service'
+import { GitHubClientService } from './github/github-client.service'
 import { RepoClient } from './repo.client'
 
 
