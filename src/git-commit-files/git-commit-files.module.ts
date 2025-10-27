@@ -1,7 +1,11 @@
 import { Module } from '@nestjs/common'
-import { GitCommitFilesService } from '@lambda/git-commit-files/git-commit-files.service'
+import { GitCommitFilesService } from './git-commit-files.service'
+import { RepositoriesHandlerModule } from './respositories-handler/repositories-handler.module'
+import { S3Service } from '../aws/s3.service'
+import { S3ParallelETLService } from './buckets/s3-parallel-uploader.service'
 
 @Module({
-  providers: [GitCommitFilesService]
+  imports: [RepositoriesHandlerModule],
+  providers: [S3Service, S3ParallelETLService, GitCommitFilesService]
 })
 export class GitCommitFilesModule {}

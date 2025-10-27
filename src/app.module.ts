@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common'
-import configuration from '@lambda/configuration';
+import configuration from './configuration';
 import { ConfigModule } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino'
 import * as pino from 'pino'
-import { GitCommitFilesModule } from '@lambda/git-commit-files/git-commit-files.module'
+import { GitCommitFilesModule } from './git-commit-files/git-commit-files.module'
 
 @Module({
   imports: [
