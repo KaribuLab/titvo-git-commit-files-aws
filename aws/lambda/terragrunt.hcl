@@ -25,6 +25,14 @@ dependency parameters {
   mock_outputs = {
     parameters = {
       "/tvo/security-scan/prod/infra/sqs/mcp/git-commit-files/input/queue_arn" = "arn:aws:sqs:us-east-1:000000000000:test-queue"
+      "/tvo/security-scan/prod/infra/s3/mcp/git-commit-files/input/bucket_arn" = "arn:aws:s3:::test-bucket"
+
+      "/tvo/security-scan/prod/infra/git/mcp/git-commit-files/bitbucket/username" = "test-username"
+      "/tvo/security-scan/prod/infra/git/mcp/git-commit-files/bitbucket/app_password" = "test-app-password"
+
+      "/tvo/security-scan/prod/infra/eventbridge/eventbus_arn" = "arn:aws:events:us-east-1:000000000000:event-bus/test-bus"
+      "/tvo/security-scan/prod/infra/eventbridge/eventbus_name" = "test-bus"
+
     }
   }
 }
@@ -42,22 +50,42 @@ inputs = {
           "logs:PutLogEvents"
         ],
         "Resource" : "${dependency.log.outputs.log_arn}:*"
-      },
-      {
+        },
+        {
+          "Effect" : "Allow",
+          "Action" : [
+            "sqs:ChangeMessageVisibility",
+            "sqs:DeleteMessage",
+            "sqs:GetQueueAttributes",
+            "sqs:ReceiveMessage",
+          ],
+          "Resource" : dependency.parameters.outputs.parameters["${local.base_path}/infra/sqs/mcp/git-commit-files/input/queue_arn"]
+        },
+        {
+          "Effect" : "Allow",
+          "Action" : [
+            "s3:GetObject",
+            "s3:PutObject"
+          ],
+          "Resource" : "${dependency.parameters.outputs.parameters["${local.base_path}/infra/s3/mcp/git-commit-files/input/bucket_arn"]}/*"
+        },
+        {
         "Effect" : "Allow",
         "Action" : [
-          "sqs:ChangeMessageVisibility",
-          "sqs:DeleteMessage",
-          "sqs:GetQueueAttributes",
-          "sqs:ReceiveMessage",
+          "events:PutEvents",
         ],
-        "Resource" : dependency.parameters.outputs.parameters["${local.base_path}/infra/sqs/mcp/git-commit-files/queue_arn"]
-      },
+        "Resource" : dependency.parameters.outputs.parameters["${local.base_path}/infra/eventbridge/eventbus_arn"]
+      }
     ]
   })
   environment_variables = {
     AWS_STAGE = local.serverless.locals.stage
     LOG_LEVEL = local.serverless.locals.stage != "prod" ? "debug" : "info"
+    BITBUCKET_USERNAME = "${dependency.parameters.outputs.parameters["${local.base_path}/infra/git/mcp/git-commit-files/bitbucket/username"]}"
+    BITBUCKET_APP_PASSWORD = "${dependency.parameters.outputs.parameters["${local.base_path}/infra/git/mcp/git-commit-files/bitbucket/app_password"]}"
+    TITVO_EVENT_BUS_NAME            = dependency.parameters.outputs.parameters["${local.base_path}/infra/eventbridge/eventbus_name"]
+    S3_BUCKET_NAME            = dependency.parameters.outputs.parameters["${local.base_path}/infra/s3/mcp/git-commit-files/bucket_name"]
+    MAX_CONCURRENT_UPLOADS    = dependency.parameters.outputs.parameters["${local.base_path}/config/mcp/git-commit-files/max_concurrent_uploads"] ?: "10"
   }
   event_sources_arn = [
     dependency.parameters.outputs.parameters["${local.base_path}/infra/sqs/mcp/git-commit-files/input/queue_arn"]
