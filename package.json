@@ -5,10 +5,7 @@
     "clean": "rm -rf dist build",
     "build": "npm run clean && rspack build",
     "dev": "turbowatch",
-    "lint": "eslint ./src/**/*.{ts,js} --fix",
-    "start:local": "ts-node -r tsconfig-paths/register src/main.ts",
-    "deploy": "terragrunt run-all init --terragrunt-non-interactive && terragrunt run-all apply --terragrunt-non-interactive",
-    "deploy:build": "npm run build && npm run deploy"
+    "lint": "eslint ./src/**/*.{ts,js} --fix"
   },
   "keywords": [
     "AWS",
@@ -38,8 +35,11 @@
     "typescript": "5.5.4"
   },
   "dependencies": {
-    "@aws-sdk/client-eventbridge": "3.914.0",
+    "@aws-sdk/client-dynamodb": "^3.918.0",
+    "@aws-sdk/client-eventbridge": "^3.918.0",
     "@aws-sdk/client-s3": "^3.913.0",
+    "@aws-sdk/client-secrets-manager": "^3.918.0",
+    "@aws-sdk/lib-dynamodb": "^3.918.0",
     "@nestjs/common": "11.1.5",
     "@nestjs/config": "4.0.2",
     "@nestjs/core": "11.1.5",

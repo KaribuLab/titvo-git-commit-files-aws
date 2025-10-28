@@ -1,20 +1,45 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { RepoClient, FileInfo } from '../repo.client'
 import { Octokit } from '@octokit/rest'
-import { ConfigService } from '@nestjs/config'
+import { ParameterService } from '@lambda/parameter/parameter.service' // ⬅️ NUEVA INYECCIÓN
+import { ParamsKeys } from '@lambda/config/config.key'
+
+// Nombre del parámetro en SSM
+const GITHUB_TOKEN_PARAM_NAME = ParamsKeys.GITHUB_TOKEN_PARAM_NAME
 
 @Injectable()
 export class GitHubClientService implements RepoClient {
-  private readonly octokit: Octokit
+  private octokit: Octokit | null = null
   private readonly logger = new Logger(GitHubClientService.name)
-  private owner: string
-  private repo: string
+  private owner: string = ''
+  private repo: string = ''
 
-  constructor(private readonly configService: ConfigService) {
-    const token = this.configService.get<string>('GITHUB_TOKEN') || ''
+  // Inyectamos ParameterService en lugar de ConfigService para el token.
+  constructor(private readonly parameterService: ParameterService) {}
+
+  /**
+   * Inicializa la instancia de Octokit de forma asíncrona usando el token
+   * obtenido de forma segura desde Parameter Service.
+   * Utiliza un singleton implícito para la instancia de octokit.
+   */
+  private async getOctokitClient(): Promise<Octokit> {
+    if (this.octokit) {
+      return this.octokit
+    }
+
+    const token = await this.parameterService.getDecryptedParameterValue(
+      GITHUB_TOKEN_PARAM_NAME
+    )
+
+    if (!token) {
+      this.logger.error(
+        `GitHub token parameter '${GITHUB_TOKEN_PARAM_NAME}' not found or empty.`
+      )
+      throw new Error('GitHub access token not available.')
+    }
+
     this.octokit = new Octokit({ auth: token })
-    this.owner = ''
-    this.repo = ''
+    return this.octokit
   }
 
   /**
@@ -35,7 +60,10 @@ export class GitHubClientService implements RepoClient {
     this.logger.log(
       `Fetching commit ${commitId} files for ${this.owner}/${this.repo}`
     )
-    const res = await this.octokit.rest.repos.getCommit({
+
+    const client = await this.getOctokitClient()
+
+    const res = await client.rest.repos.getCommit({
       owner: this.owner,
       repo: this.repo,
       ref: commitId
@@ -52,12 +80,12 @@ export class GitHubClientService implements RepoClient {
   /**
    * Descarga el contenido de un archivo de un commit específico
    */
-  async downloadFile(
-    path: string,
-    commitId: string
-  ): Promise<Buffer> {
+  async downloadFile(path: string, commitId: string): Promise<Buffer> {
     this.logger.log(`Downloading file ${path} @ commit ${commitId}`)
-    const resp = await this.octokit.rest.repos.getContent({
+
+    const client = await this.getOctokitClient()
+
+    const resp = await client.rest.repos.getContent({
       owner: this.owner,
       repo: this.repo,
       path,
@@ -69,8 +97,9 @@ export class GitHubClientService implements RepoClient {
     }
 
     const data: any = resp.data
-    if (data.content === undefined) throw new Error('No content found in GitHub response')
+    if (data.content === undefined)
+      throw new Error('No content found in GitHub response')
 
-    return Buffer.from(data.content, data.encoding)
+    return Buffer.from(data.content, data.encoding as BufferEncoding)
   }
 }

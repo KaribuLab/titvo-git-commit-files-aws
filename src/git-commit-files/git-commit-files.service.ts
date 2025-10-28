@@ -11,42 +11,50 @@ import { inspect } from 'util'
 import { EventBridgeService } from '@lambda/aws/eventbridge'
 
 /**
- * Servicio principal que maneja el flujo completo de procesamiento del commit.
- * Detecta el proveedor, obtiene los archivos modificados y los sube a S3.
+ * Main service that handles the complete commit processing flow.
+ * It detects the provider, fetches the modified files, and uploads them to S3.
  */
 @Injectable()
 export class GitCommitFilesService {
   private readonly logger = new Logger(GitCommitFilesService.name)
+  private static readonly EVENT_SOURCE = 'mcp.repo.files.processor'
+  private static readonly EVENT_DETAIL_TYPE = 'output'
+  private static readonly EVENT_BUS_CONFIG_KEY = 'titvoEventBusName'
 
   constructor(
     private readonly configService: ConfigService,
     private readonly repoFactory: RepoFactoryService,
     private readonly s3Service: S3ParallelETLService,
-    private readonly eventBridgeService: EventBridgeService // **NUEVA INYECCIÓN**
+    private readonly eventBridgeService: EventBridgeService
   ) {}
 
   /**
-   * Procesa un commit recibido desde un evento Lambda.
-   * @param input Datos del commit.
+   * Processes a commit received from a Lambda event.
+   * @param input Commit data.
    */
   async process(
     input: GitCommitFilesInputDto
   ): Promise<GitCommitFilesOutputDto> {
-    const { taskId, data } = input
+    const { jobId, data } = input
     let success = false
     let message = ''
     let uploadedFiles: string[] = []
-    
-    const taskContext = `[Task: ${taskId}]` 
 
-    this.logger.log(`Iniciando procesamiento del commit ${data.commitId}...`, taskContext)
+    const jobCorrelationId = `[Job: ${jobId}]`
 
+    this.logger.log(
+      `Starting commit processing for ${data.commitId}...`,
+      jobCorrelationId
+    )
+
+    // Initial status check before starting heavy work
     if (!this.shouldProcess(data)) {
-      message = 'El commit no está en estado success. Proceso omitido.'
-      this.logger.warn(message, taskContext)
-      
+      message = 'Commit status is not "success". Process skipped.'
+      this.logger.warn(message, jobCorrelationId)
+
+      // Return a clean failure result
       return {
-        taskId,
+        jobId: jobId,
         success: false,
         message,
         data: { uploadedFiles, commitId: data.commitId }
@@ -56,94 +64,114 @@ export class GitCommitFilesService {
     try {
       const repoClient = this.repoFactory.getClientForRepoUrl(data.repository)
 
-      
+      // Fetch files
       const files: FileInfo[] = await repoClient.getCommitFiles(data.commitId)
-      this.logger.log(`Se encontraron ${files.length} archivos modificados.`, taskContext)
+      this.logger.log(`Found ${files.length} modified files.`, jobCorrelationId)
 
+      // Upload files to S3
       uploadedFiles = await this.s3Service.initETLBatch(
         { files, commitId: data.commitId },
         repoClient
       )
 
       success = true
-      message = `Commit ${data.commitId} procesado correctamente.`
-      this.logger.log('Todos los archivos fueron procesados exitosamente.', taskContext)
+      message = `Commit ${data.commitId} processed successfully.`
+      this.logger.log('All files processed successfully.', jobCorrelationId)
     } catch (error) {
-      const errorMessage = `Error procesando el commit ${data.commitId}. Mensaje: ${(error as Error).message}`
-      
+      // Better error handling/logging
+      const err = error as Error
+      const errorMessage = `Error processing commit ${data.commitId}. Message: ${err.message}`
+
       this.logger.error(
-        `${errorMessage} | Detalles: ${inspect(error, false, 5)}`,
-        (error as Error).stack, 
-        taskContext 
+        `${errorMessage} | Details: ${inspect(error, {
+          showHidden: false,
+          depth: 5
+        })}`,
+        err.stack,
+        jobCorrelationId
       )
 
-      message = `Error procesando el commit: ${(error as Error).message}`
-      uploadedFiles = []
+      message = `Error processing commit: ${err.message}`
+      uploadedFiles = [] // Ensure uploadedFiles is empty on failure
+    } finally {
+      // Always send the result event, regardless of success or failure
+      await this.sendEventBridgeResult(
+        jobId,
+        success,
+        message,
+        data.commitId,
+        uploadedFiles
+      )
     }
-    
-    await this.sendEventBridgeResult(taskId, success, message, data.commitId, uploadedFiles)
 
+    // Return the final result
     return {
-      taskId,
+      jobId: jobId,
       success,
       message,
       data: { uploadedFiles, commitId: data.commitId }
     }
   }
-  
+
   /**
-   * Determina si el commit debe ser procesado.
-   * @param data Datos del commit.
-   * @returns true si el commit está en estado 'success', false en caso contrario.
+   * Determines if the commit should be processed.
+   * @param data Commit data.
+   * @returns true if the commit status is 'success', false otherwise.
    */
   private shouldProcess(data: GitCommitFilesInputDto['data']): boolean {
     return data.status === 'success'
   }
 
   /**
-   * Envía el resultado final del procesamiento del commit a EventBridge.
-   * @param taskId ID de la tarea.
-   * @param success Indicador de éxito.
-   * @param message Mensaje de resultado.
-   * @param commitId ID del commit procesado.
-   * @param uploadedFiles Lista de archivos subidos.
+   * Sends the final result of the commit processing to EventBridge.
+   * @param jobId Task ID.
+   * @param success Success indicator.
+   * @param message Result message.
+   * @param commitId ID of the processed commit.
+   * @param uploadedFiles List of uploaded files.
    */
   private async sendEventBridgeResult(
-    taskId: string, 
-    success: boolean, 
-    message: string, 
-    commitId: string, 
+    jobId: string,
+    success: boolean,
+    message: string,
+    commitId: string,
     uploadedFiles: string[]
   ): Promise<void> {
-    const eventBusName = this.configService.get<string>('titvoEventBusName') as string
+    const eventBusName = this.configService.get<string>(
+      GitCommitFilesService.EVENT_BUS_CONFIG_KEY
+    )
 
     if (!eventBusName) {
-      this.logger.warn(`No se encontró 'titvoEventBusName' en la configuración. EventBridge event omitido para tarea ${taskId}.`)
+      this.logger.warn(
+        `'${GitCommitFilesService.EVENT_BUS_CONFIG_KEY}' not found in configuration. EventBridge event skipped for job ${jobId}.`
+      )
       return
     }
 
     try {
-      await this.eventBridgeService.putEvents([{
-        Source: 'mcp.repo.files.processor', // Fuente apropiada para este servicio
-        DetailType: 'output',
-        Detail: JSON.stringify({
-          task_id: taskId,
-          success: success,
-          message: message,
-          data: {
-            commit_id: commitId,
-            uploaded_files: uploadedFiles 
-          }
-        }),
-        EventBusName: eventBusName
-      }])
-      
-      this.logger.log(`EventBridge event enviado exitosamente para tarea ${taskId}.`)
+      await this.eventBridgeService.putEvents([
+        {
+          Source: GitCommitFilesService.EVENT_SOURCE,
+          DetailType: GitCommitFilesService.EVENT_DETAIL_TYPE,
+          Detail: JSON.stringify({
+            job_id: jobId,
+            success: success,
+            message: message,
+            data: {
+              commit_id: commitId,
+              uploaded_files: uploadedFiles
+            }
+          }),
+          EventBusName: eventBusName
+        }
+      ])
+
+      this.logger.log(`EventBridge event successfully sent for job ${jobId}.`)
     } catch (error) {
       this.logger.error(
-        `Error al enviar EventBridge event para tarea ${taskId}: ${(error as Error).message}`,
+        `Error sending EventBridge event for job ${jobId}: ${(error as Error).message}`,
         (error as Error).stack,
-        `[Task: ${taskId}]`
+        `[Job: ${jobId}]`
       )
     }
   }

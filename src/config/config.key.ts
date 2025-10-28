@@ -7,5 +7,15 @@ export enum ConfigKeys {
   AWS_ENDPOINT = 'AWS_ENDPOINT',
   AWS_REGION = 'AWS_REGION',
 
-  TITVO_EVENT_BUS_NAME = 'TITVO_EVENT_BUS_NAME'
+  TITVO_EVENT_BUS_NAME = 'TITVO_EVENT_BUS_NAME',
+
+  PARAMETER_TABLE_NAME = 'parameterTableName',
+
+  AES_KEY_PATH = 'aesKeyPath',
+}
+
+
+export enum ParamsKeys {
+  GITHUB_TOKEN_PARAM_NAME = 'github_secret_token',
+  CREDENTIALS_PARAM_NAME = 'bitbucket_client_credentials'
 }

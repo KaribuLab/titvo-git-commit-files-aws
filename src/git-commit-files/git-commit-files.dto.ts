@@ -3,7 +3,7 @@
  * Este DTO se utilizará para validar o tipar los datos de entrada.
  */
 export class GitCommitFilesInputDto {
-  taskId: string
+  jobId: string
   data: {
     status: string
     commitId: string
@@ -16,7 +16,7 @@ export class GitCommitFilesInputDto {
 }
 
 export interface BaseOutputDto {
-  taskId: string
+  jobId: string
   success: boolean
   message: string
   data: unknown
