@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino'
 import * as pino from 'pino'
 import { GitCommitFilesModule } from './git-commit-files/git-commit-files.module'
+import { ParameterModule } from './parameter/parameter.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { GitCommitFilesModule } from './git-commit-files/git-commit-files.module
       isGlobal: true,
       load: [configuration],
     }),
+    ParameterModule.forRoot(),
     GitCommitFilesModule,
   ]
 })

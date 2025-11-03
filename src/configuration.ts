@@ -1,5 +1,4 @@
-import { ConfigKeys } from "./config/config.key"
-
+import { ConfigKeys } from './config/config.key'
 
 const configuration = () => ({
   [ConfigKeys.AWS_STAGE]: process.env[ConfigKeys.AWS_STAGE] ?? 'prod',
@@ -8,11 +7,6 @@ const configuration = () => ({
   [ConfigKeys.AWS_REGION]: process.env[ConfigKeys.AWS_REGION] ?? 'us-east-1',
 
   [ConfigKeys.S3_BUCKET_NAME]: process.env[ConfigKeys.S3_BUCKET_NAME],
-
-  [ConfigKeys.MAX_CONCURRENT_UPLOADS]: parseInt(
-    process.env[ConfigKeys.MAX_CONCURRENT_UPLOADS] ?? '10',
-    10
-  ),
 
   [ConfigKeys.TITVO_EVENT_BUS_NAME]:
     process.env[ConfigKeys.TITVO_EVENT_BUS_NAME]

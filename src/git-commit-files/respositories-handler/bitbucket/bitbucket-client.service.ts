@@ -3,11 +3,12 @@ import axios, { AxiosRequestConfig } from 'axios'
 import { RepoClient, FileInfo } from '../repo.client'
 import { inspect } from 'util'
 import { ParameterService } from '@lambda/parameter/parameter.service'
+import { ParamsKeys } from '@lambda/config/config.key'
 
 // URL y nombres de parámetros constantes
 const ACCESS_TOKEN_URL = 'https://bitbucket.org/site/oauth2/access_token'
 const BITBUCKET_API_URL = 'https://api.bitbucket.org/2.0'
-const CREDENTIALS_PARAM_NAME = 'bitbucket_client_credentials'
+const CREDENTIALS_PARAM_NAME = ParamsKeys.CREDENTIALS_PARAM_NAME
 
 @Injectable()
 export class BitbucketClientService implements RepoClient {

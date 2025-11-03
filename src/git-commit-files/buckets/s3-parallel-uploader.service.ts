@@ -1,9 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common'
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import pLimit from 'p-limit'
 import { S3Service } from '../../aws/s3.service'
 import { FileInfo, RepoClient } from '../respositories-handler/repo.client'
-import { ConfigKeys } from '@lambda/config/config.key'
+import { ConfigKeys, ParamsKeys } from '@lambda/config/config.key'
+import { ParameterService } from '@lambda/parameter/parameter.service'
 
 export interface FileUploadTask {
   s3Key: string
@@ -11,7 +12,7 @@ export interface FileUploadTask {
   filePath: string
 }
 
-const DEFAULT_MAX_CONCURRENCY = 10 
+const DEFAULT_MAX_CONCURRENCY = 10
 
 interface CommitData {
   files: FileInfo[]
@@ -19,29 +20,39 @@ interface CommitData {
 }
 
 @Injectable()
-export class S3ParallelETLService {
+export class S3ParallelETLService implements OnModuleInit {
   private readonly logger = new Logger(S3ParallelETLService.name)
-  private readonly limit: pLimit.Limit
-  private readonly bucketName: string
+  private limit: pLimit.Limit
+  private bucketName: string
 
   constructor(
     private readonly s3Service: S3Service,
-    private readonly configService: ConfigService
-  ) {
-    const bucket = this.configService.get<string>(ConfigKeys.S3_BUCKET_NAME)
-    
+    private readonly configService: ConfigService,
+    private readonly parameterService: ParameterService
+  ) {}
+
+  async onModuleInit() {
+    const bucket = this.parameterService.getParameterValue<string>(ConfigKeys.S3_BUCKET_NAME)
+
     if (!bucket) {
-        throw new Error(`Configuration key ${ConfigKeys.S3_BUCKET_NAME} is missing. Cannot initialize S3ParallelETLService.`)
+      throw new Error(
+        `Configuration key ${ConfigKeys.S3_BUCKET_NAME} is missing. Cannot initialize S3ParallelETLService.`
+      )
     }
     this.bucketName = bucket
 
-    const maxConcurrency = this.configService.get<number>(ConfigKeys.MAX_CONCURRENT_UPLOADS) || DEFAULT_MAX_CONCURRENCY
-    
+    const maxConcurrencyValueParam =
+      (await this.parameterService.getParameterValue(
+        ParamsKeys.MAX_CONCURRENT_UPLOADS
+      )) ?? DEFAULT_MAX_CONCURRENCY
+
+    const maxConcurrency = Number(maxConcurrencyValueParam)
     this.limit = pLimit(maxConcurrency)
 
     this.logger.log(
       `Initialized with a concurrency limit of ${maxConcurrency} workers. Using bucket: ${this.bucketName}`
     )
+    this.logger.log('S3ParallelETLService module initialized.')
   }
 
   /**

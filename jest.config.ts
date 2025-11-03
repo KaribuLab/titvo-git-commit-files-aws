@@ -8,7 +8,7 @@ const config: Config.InitialOptions = {
     '^.+\\.ts$': ['ts-jest', { useESM: true }],
   },
   moduleNameMapper: {
-    '^@lambda/(.*)$': '<rootDir>/$1',
+    '^@lambda/(.*)$': '<rootDir>/src/$1',
   },
 };
 

@@ -33,6 +33,7 @@ export class ParameterService {
     parameterName: string
   ): Promise<string | undefined> {
     const result = await this.getParameterValue(parameterName)
+    console.log('Encrypted parameter value:', { parameterName, result })
     return result ? this.decrypt(result) : undefined
   }
 
@@ -84,6 +85,7 @@ export class ParameterService {
 export function createParameterService(
   options: ParameterServiceOptions
 ): ParameterService {
+  console.log('Creating ParameterService with options:', options)
   return new ParameterService(
     options.dynamoService,
     options.secretManagerService,
