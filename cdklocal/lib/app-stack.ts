@@ -30,7 +30,7 @@ export class AppStack extends cdk.Stack {
       memorySize: 512,
       description: 'Lambda function for MCP Git Commit Files',
       environment: {
-        AWS_STAGE: 'local',
+        AWS_STAGE: 'localstack',
         LOG_LEVEL: 'debug',
       },
     });
