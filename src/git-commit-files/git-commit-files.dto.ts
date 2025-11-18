@@ -5,13 +5,8 @@
 export class GitCommitFilesInputDto {
   jobId: string
   data: {
-    status: string
     commitId: string
     repository: string
-    branch?: string
-    commitMessage?: string
-    commitAuthor?: string
-    commitDate?: string
   }
 }
 

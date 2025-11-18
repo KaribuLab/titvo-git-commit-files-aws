@@ -17,7 +17,7 @@ import { EventBridgeService } from '@lambda/aws/eventbridge'
 @Injectable()
 export class GitCommitFilesService {
   private readonly logger = new Logger(GitCommitFilesService.name)
-  private static readonly EVENT_SOURCE = 'mcp.repo.files.processor'
+  private static readonly EVENT_SOURCE = 'mcp.tool.git.commit-files'
   private static readonly EVENT_DETAIL_TYPE = 'output'
   private static readonly EVENT_BUS_CONFIG_KEY = 'titvoEventBusName'
 
@@ -26,7 +26,7 @@ export class GitCommitFilesService {
     private readonly repoFactory: RepoFactoryService,
     private readonly s3Service: S3ParallelETLService,
     private readonly eventBridgeService: EventBridgeService
-  ) {}
+  ) { }
 
   /**
    * Processes a commit received from a Lambda event.
@@ -43,23 +43,9 @@ export class GitCommitFilesService {
     const jobCorrelationId = `[Job: ${jobId}]`
 
     this.logger.log(
-      `Starting commit processing for ${data.commitId}...`,
+      `Starting commit processing for ${data.commitId} in repository ${data.repository}...`,
       jobCorrelationId
     )
-
-    // Initial status check before starting heavy work
-    if (!this.shouldProcess(data)) {
-      message = 'Commit status is not "success". Process skipped.'
-      this.logger.warn(message, jobCorrelationId)
-
-      // Return a clean failure result
-      return {
-        jobId: jobId,
-        success: false,
-        message,
-        data: { uploadedFiles, commitId: data.commitId }
-      }
-    }
 
     try {
       const repoClient = this.repoFactory.getClientForRepoUrl(data.repository)
@@ -111,15 +97,6 @@ export class GitCommitFilesService {
       message,
       data: { uploadedFiles, commitId: data.commitId }
     }
-  }
-
-  /**
-   * Determines if the commit should be processed.
-   * @param data Commit data.
-   * @returns true if the commit status is 'success', false otherwise.
-   */
-  private shouldProcess(data: GitCommitFilesInputDto['data']): boolean {
-    return data.status === 'success'
   }
 
   /**

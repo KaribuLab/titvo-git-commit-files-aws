@@ -33,7 +33,13 @@ if (app === undefined) {
 const service = app.get(GitCommitFilesService)
 
 interface GitCommitFilesEvent {
-  detail: GitCommitFilesInputDto
+  detail: {
+    job_id: string,
+    data: {
+      repository: string,
+      commit_id: string,
+    }
+  }
 }
 
 export const handler: Handler<SQSEvent> = async (
@@ -50,7 +56,13 @@ export const handler: Handler<SQSEvent> = async (
 
       const promises = records.map(async (record) => {
         logger.debug(`Procesando mensaje: ${JSON.stringify(record)}`)
-        return service.process(record.detail)
+        return service.process({
+          jobId: record.detail.job_id,
+          data: {
+            repository: record.detail.data.repository,
+            commitId: record.detail.data.commit_id,
+          }
+        })
       })
 
       await Promise.all(promises)
