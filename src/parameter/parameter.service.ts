@@ -48,11 +48,6 @@ export class ParameterService {
       this.aesKey = aesKey
     }
 
-    // Validar que la clave tenga 32 caracteres (AES-256)
-    if (this.aesKey.length !== 32) {
-      throw new Error('AES_KEY must have 32 characters length')
-    }
-
     // Decodificar de base64
     const encrypted = Buffer.from(text, 'base64')
 
