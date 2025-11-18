@@ -39,13 +39,13 @@ export class ParameterService {
 
   async decrypt(text: string): Promise<string> {
     if (!this.aesKey) {
-      const aesKey = await this.secretManagerService.getSecretValue(
+      const base64AesKey = await this.secretManagerService.getSecretValue(
         this.aesKeyPath
       )
-      if (!aesKey) {
+      if (!base64AesKey) {
         throw new Error('AES key is not set')
       }
-      this.aesKey = aesKey
+      this.aesKey = Buffer.from(base64AesKey, 'base64').toString('utf8')
     }
 
     // Decodificar de base64
