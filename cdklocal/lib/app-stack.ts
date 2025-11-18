@@ -40,7 +40,7 @@ export class AppStack extends cdk.Stack {
         LOG_LEVEL: 'debug',
         TITVO_EVENT_BUS_NAME: props.eventBusName,
         PARAMETER_TABLE_NAME: props.parameterTableName,
-        S3_BUCKET_NAME: props.s3GitFilesBucketName,
+        S3_GIT_FILES_BUCKET_NAME: props.s3GitFilesBucketName,
         AES_KEY_PATH: props.aesKeyPath,
         NODE_OPTIONS: '--enable-source-maps',
       },
