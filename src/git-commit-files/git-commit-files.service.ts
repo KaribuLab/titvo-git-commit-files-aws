@@ -9,6 +9,7 @@ import { FileInfo } from './respositories-handler/repo.client'
 import { S3ParallelETLService } from './buckets/s3-parallel-uploader.service'
 import { inspect } from 'util'
 import { EventBridgeService } from '@lambda/aws/eventbridge'
+import { ConfigKeys } from '@lambda/config/config.key'
 
 /**
  * Main service that handles the complete commit processing flow.
@@ -19,7 +20,6 @@ export class GitCommitFilesService {
   private readonly logger = new Logger(GitCommitFilesService.name)
   private static readonly EVENT_SOURCE = 'mcp.tool.git.commit-files'
   private static readonly EVENT_DETAIL_TYPE = 'output'
-  private static readonly EVENT_BUS_CONFIG_KEY = 'titvoEventBusName'
 
   constructor(
     private readonly configService: ConfigService,
@@ -115,12 +115,12 @@ export class GitCommitFilesService {
     uploadedFiles: string[]
   ): Promise<void> {
     const eventBusName = this.configService.get<string>(
-      GitCommitFilesService.EVENT_BUS_CONFIG_KEY
+      ConfigKeys.TITVO_EVENT_BUS_NAME
     )
 
     if (!eventBusName) {
       this.logger.warn(
-        `'${GitCommitFilesService.EVENT_BUS_CONFIG_KEY}' not found in configuration. EventBridge event skipped for job ${jobId}.`
+        `'${ConfigKeys.TITVO_EVENT_BUS_NAME}' not found in configuration. EventBridge event skipped for job ${jobId}.`
       )
       return
     }
