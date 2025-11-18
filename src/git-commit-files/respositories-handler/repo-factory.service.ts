@@ -33,6 +33,6 @@ export class RepoFactoryService {
       return this.bitbucket
     }
 
-    throw new Error('Unsupported repo provider')
+    throw new Error(`Unsupported repo provider: ${repoUrl}`)
   }
 }
