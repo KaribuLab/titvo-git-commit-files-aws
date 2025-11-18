@@ -56,7 +56,9 @@ module.exports = {
                 legacyDecorator: true,
                 decoratorMetadata: true
               }
-            }
+            },
+            sourceMaps: true,
+            inlineSourcesContent: false
           }
         }
       }
