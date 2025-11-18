@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
-import { AppStack } from '../lib/app-stack';
+import { SSMClient, GetParametersByPathCommand } from '@aws-sdk/client-ssm';
 import { CloudFormationClient, DescribeStacksCommand } from '@aws-sdk/client-cloudformation';
+import { AppStack, basePath } from '../lib/app-stack';
 
 async function isAppStackCompleted(cloudFormationClient: CloudFormationClient): Promise<boolean> {
   const commandCloudFormation = new DescribeStacksCommand({
@@ -21,6 +22,31 @@ async function isAppStackCompleted(cloudFormationClient: CloudFormationClient): 
   }
 }
 
+async function getParameters(ssmClient: SSMClient, nextToken?: string): Promise<Record<string, string>> {
+  const commandSSM = new GetParametersByPathCommand({
+    Path: basePath,
+    Recursive: true,
+    NextToken: nextToken,
+  });
+  const responseSSM = await ssmClient.send(commandSSM);
+  if (responseSSM.Parameters !== undefined && responseSSM.Parameters.length === 0) {
+    throw new Error('No parameters found');
+  }
+  let params: Record<string, string> = {};
+  if (responseSSM.Parameters !== undefined) {
+    params = responseSSM.Parameters.reduce((acc, param) => {
+      if (param.Name !== undefined && param.Value !== undefined) {
+        acc[param.Name as keyof Record<string, string>] = param.Value;
+      }
+      return acc;
+    }, {} as Record<string, string>);
+  }
+  if (responseSSM.NextToken !== undefined) {
+    params = { ...params, ...await getParameters(ssmClient, responseSSM.NextToken) };
+  }
+  return params;
+}
+
 (async () => {
   if (!process.env.CDK_STACK_NAME) {
     throw new Error('CDK_STACK_NAME is not set');
@@ -33,6 +59,11 @@ async function isAppStackCompleted(cloudFormationClient: CloudFormationClient): 
   while (!await isAppStackCompleted(cloudFormationClient)) {
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
+  const ssmClient = new SSMClient({
+    region: 'us-east-1',
+    endpoint: process.env.AWS_ENDPOINT_URL ?? 'http://localstack:4566',
+  });
+  const params = await getParameters(ssmClient);
   const app = new cdk.App();
   new AppStack(app, process.env.CDK_STACK_NAME as string, {
     /* If you don't specify 'env', this stack will be environment-agnostic.
@@ -49,6 +80,10 @@ async function isAppStackCompleted(cloudFormationClient: CloudFormationClient): 
 
     // Usar el sintetizador heredado para LocalStack (no requiere bootstrap)
     synthesizer: new cdk.LegacyStackSynthesizer(),
+    eventBusName: params[`${basePath}/eventbridge/eventbus_name`],
+    parameterTableName: params[`${basePath}/dynamodb/parameter/dynamodb_table_name`],
+    s3GitFilesBucketName: params[`${basePath}/s3/mcp/git-commit-files/input/bucket_name`] || 'tvo-mcp-git-commit-files-input-local',
+    aesKeyPath: '/tvo/security-scan/localstack/aes_secret',
 
     /* For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html */
   });

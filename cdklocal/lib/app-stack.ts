@@ -7,10 +7,17 @@ import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { Queue } from 'aws-cdk-lib/aws-sqs';
 import * as path from 'path';
 
-const basePath = '/tvo/security-scan/localstack/infra';
+export const basePath = '/tvo/security-scan/localstack/infra';
+
+export interface AppStackProps extends cdk.StackProps {
+  eventBusName: string;
+  parameterTableName: string;
+  s3GitFilesBucketName: string;
+  aesKeyPath: string;
+}
 
 export class AppStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props: AppStackProps) {
     super(scope, id, props);
 
     // Importar cola SQS existente de LocalStack
@@ -32,6 +39,11 @@ export class AppStack extends cdk.Stack {
       environment: {
         AWS_STAGE: 'localstack',
         LOG_LEVEL: 'debug',
+        TITVO_EVENT_BUS_NAME: props.eventBusName,
+        PARAMETER_TABLE_NAME: props.parameterTableName,
+        S3_GIT_FILES_BUCKET_NAME: props.s3GitFilesBucketName,
+        AES_KEY_PATH: props.aesKeyPath,
+        NODE_OPTIONS: '--enable-source-maps',
       },
     });
 

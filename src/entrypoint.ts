@@ -9,6 +9,7 @@ import { AppModule } from '@lambda/app.module'
 import { INestApplicationContext, Logger as NestLogger } from '@nestjs/common'
 import { Logger } from 'nestjs-pino'
 import { GitCommitFilesService } from '@lambda/git-commit-files/git-commit-files.service'
+import { GitCommitFilesInputDto } from '@lambda/git-commit-files/git-commit-files.dto'
 
 const logger = new NestLogger('git-commit-filesLambdaHandler')
 
@@ -31,6 +32,10 @@ if (app === undefined) {
 
 const service = app.get(GitCommitFilesService)
 
+interface GitCommitFilesEvent {
+  detail: GitCommitFilesInputDto
+}
+
 export const handler: Handler<SQSEvent> = async (
   event: SQSEvent,
   _context: Context
@@ -39,13 +44,13 @@ export const handler: Handler<SQSEvent> = async (
     try {
       logger.log(`Iniciando git-commit-filesLambdaHandler: ${JSON.stringify(event)}`)
 
-      const records: any[] = event.Records.map(
-        (record: SQSRecord) => JSON.parse(record.body) as any
+      const records: GitCommitFilesEvent[] = event.Records.map(
+        (record: SQSRecord) => JSON.parse(record.body) as GitCommitFilesEvent
       )
 
       const promises = records.map(async (record) => {
         logger.debug(`Procesando mensaje: ${JSON.stringify(record)}`)
-        return service.process(record)
+        return service.process(record.detail)
       })
 
       await Promise.all(promises)
