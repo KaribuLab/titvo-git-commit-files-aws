@@ -27,12 +27,11 @@ export class S3ParallelETLService implements OnModuleInit {
 
   constructor(
     private readonly s3Service: S3Service,
-    private readonly configService: ConfigService,
     private readonly parameterService: ParameterService
   ) {}
 
   async onModuleInit() {
-    const bucket = this.parameterService.getParameterValue<string>(ConfigKeys.S3_BUCKET_NAME)
+    const bucket = await this.parameterService.getParameterValue(ConfigKeys.S3_BUCKET_NAME)
 
     if (!bucket) {
       throw new Error(
