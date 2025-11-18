@@ -27,21 +27,19 @@ export class S3ParallelETLService implements OnModuleInit {
 
   constructor(
     private readonly s3Service: S3Service,
-    private readonly parameterService: ParameterService
-  ) {}
+    private readonly configService: ConfigService
+  ) { }
 
   async onModuleInit() {
-    const bucket = await this.parameterService.getParameterValue(ConfigKeys.S3_BUCKET_NAME)
-
+    const bucket = this.configService.get<string>(ConfigKeys.S3_BUCKET_NAME)
     if (!bucket) {
       throw new Error(
         `Configuration key ${ConfigKeys.S3_BUCKET_NAME} is missing. Cannot initialize S3ParallelETLService.`
       )
     }
     this.bucketName = bucket
-
     const maxConcurrencyValueParam =
-      (await this.parameterService.getParameterValue(
+      (await this.configService.get(
         ParamsKeys.MAX_CONCURRENT_UPLOADS
       )) ?? DEFAULT_MAX_CONCURRENCY
 
@@ -68,7 +66,6 @@ export class S3ParallelETLService implements OnModuleInit {
     this.logger.log(
       `Starting parallel upload for ${commitData.files.length} files...`
     )
-
     const uploadPromises = commitData.files.map((file) =>
       this.limit(async () => {
         try {
