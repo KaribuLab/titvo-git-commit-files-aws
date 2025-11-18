@@ -82,7 +82,7 @@ async function getParameters(ssmClient: SSMClient, nextToken?: string): Promise<
     synthesizer: new cdk.LegacyStackSynthesizer(),
     eventBusName: params[`${basePath}/eventbridge/eventbus_name`],
     parameterTableName: params[`${basePath}/dynamodb/parameter/dynamodb_table_name`],
-    s3GitFilesBucketName: params[`${basePath}/s3/mcp/git-commit-files/input/bucket_name`] || 'tvo-mcp-git-commit-files-input-local',
+    s3GitFilesBucketName: params[`${basePath}/s3/git-commit-files/bucket_name`],
     aesKeyPath: '/tvo/security-scan/localstack/aes_secret',
 
     /* For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html */

@@ -1,7 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { StringParameter } from 'aws-cdk-lib/aws-ssm';
-import { Bucket } from 'aws-cdk-lib/aws-s3';
 import { Function, Runtime, Code } from 'aws-cdk-lib/aws-lambda';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { Queue } from 'aws-cdk-lib/aws-sqs';
@@ -41,7 +40,7 @@ export class AppStack extends cdk.Stack {
         LOG_LEVEL: 'debug',
         TITVO_EVENT_BUS_NAME: props.eventBusName,
         PARAMETER_TABLE_NAME: props.parameterTableName,
-        S3_GIT_FILES_BUCKET_NAME: props.s3GitFilesBucketName,
+        S3_BUCKET_NAME: props.s3GitFilesBucketName,
         AES_KEY_PATH: props.aesKeyPath,
         NODE_OPTIONS: '--enable-source-maps',
       },
