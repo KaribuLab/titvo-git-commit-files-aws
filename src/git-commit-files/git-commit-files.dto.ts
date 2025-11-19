@@ -19,7 +19,7 @@ export interface BaseOutputDto {
 
 export interface GitCommitFilesOutputDto extends BaseOutputDto {
   data: {
-    uploadedFiles: string[]
+    filesPaths: string[]
     commitId?: string
   }
 }

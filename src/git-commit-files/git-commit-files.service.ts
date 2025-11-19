@@ -38,7 +38,7 @@ export class GitCommitFilesService {
     const { jobId, data } = input
     let success = false
     let message = ''
-    let uploadedFiles: string[] = []
+    let filesPaths: string[] = []
 
     const jobCorrelationId = `[Job: ${jobId}]`
 
@@ -55,7 +55,7 @@ export class GitCommitFilesService {
       this.logger.log(`Found ${files.length} modified files.`, jobCorrelationId)
 
       // Upload files to S3
-      uploadedFiles = await this.s3Service.initETLBatch(
+      filesPaths = await this.s3Service.initETLBatch(
         { files, commitId: data.commitId },
         repoClient
       )
@@ -78,7 +78,7 @@ export class GitCommitFilesService {
       )
 
       message = `Error processing commit: ${err.message}`
-      uploadedFiles = [] // Ensure uploadedFiles is empty on failure
+      filesPaths = [] // Ensure filesPaths is empty on failure
     } finally {
       // Always send the result event, regardless of success or failure
       await this.sendEventBridgeResult(
@@ -86,7 +86,7 @@ export class GitCommitFilesService {
         success,
         message,
         data.commitId,
-        uploadedFiles
+        filesPaths
       )
     }
 
@@ -95,7 +95,7 @@ export class GitCommitFilesService {
       jobId: jobId,
       success,
       message,
-      data: { uploadedFiles, commitId: data.commitId }
+      data: { filesPaths, commitId: data.commitId }
     }
   }
 
@@ -105,14 +105,14 @@ export class GitCommitFilesService {
    * @param success Success indicator.
    * @param message Result message.
    * @param commitId ID of the processed commit.
-   * @param uploadedFiles List of uploaded files.
+   * @param filesPaths List of files paths.
    */
   private async sendEventBridgeResult(
     jobId: string,
     success: boolean,
     message: string,
     commitId: string,
-    uploadedFiles: string[]
+    filesPaths: string[]
   ): Promise<void> {
     const eventBusName = this.configService.get<string>(
       ConfigKeys.TITVO_EVENT_BUS_NAME
@@ -136,7 +136,7 @@ export class GitCommitFilesService {
             message: message,
             data: {
               commit_id: commitId,
-              uploaded_files: uploadedFiles
+              files_paths: filesPaths
             }
           }),
           EventBusName: eventBusName
