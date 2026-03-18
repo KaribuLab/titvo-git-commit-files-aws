@@ -29,8 +29,6 @@ dependency parameters {
       "/tvo/security-scan/prod/infra/s3/git-commit-files/bucket_name"          = "tvo-mcp-git-commit-files-prod"
       "/tvo/security-scan/prod/infra/eventbridge/eventbus_arn"                 = "arn:aws:events:us-east-2:123456789012:event-bus/tvo-mcp-eventbus-prod"
       "/tvo/security-scan/prod/infra/eventbridge/eventbus_name"                = "tvo-mcp-eventbus-prod"
-      "/tvo/security-scan/prod/infra/secrets/bitbucket/secret_arn"             = "arn:aws:secretsmanager:us-east-2:123456789012:secret:/tvo/mcp/prod/bitbucket_credentials"
-      "/tvo/security-scan/prod/infra/secrets/github/secret_arn"                = "arn:aws:secretsmanager:us-east-2:123456789012:secret:/tvo/mcp/prod/github_access_token"
       "/tvo/security-scan/prod/infra/secret/manager/arn"                       = "arn:aws:secretsmanager:us-east-2:123456789012:secret:/tvo/security-scan/prod"
       "/tvo/security-scan/prod/infra/dynamo/parameter-table-arn"               = "arn:aws:dynamodb:us-east-2:123456789012:table/tvo-security-scan-configuration-table-prod"
       "/tvo/security-scan/prod/infra/dynamo/parameter-table-name"              = "tvo-security-scan-configuration-table-prod"
