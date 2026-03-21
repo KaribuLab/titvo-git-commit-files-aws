@@ -18,5 +18,7 @@ locals {
   service_bucket = "${local.service_name}-${local.region}${local.bucket_suffix}"
   log_retention  = 7
   parameter_path = "/tvo/security-scan"
-  common_tags = {}
+  common_tags = {
+    Project = "Titvo"
+  }
 }
