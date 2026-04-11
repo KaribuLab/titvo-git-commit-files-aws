@@ -29,9 +29,6 @@ async function getParameters(ssmClient: SSMClient, nextToken?: string): Promise<
     NextToken: nextToken,
   });
   const responseSSM = await ssmClient.send(commandSSM);
-  if (responseSSM.Parameters !== undefined && responseSSM.Parameters.length === 0) {
-    throw new Error('No parameters found');
-  }
   let params: Record<string, string> = {};
   if (responseSSM.Parameters !== undefined) {
     params = responseSSM.Parameters.reduce((acc, param) => {
@@ -81,7 +78,7 @@ async function getParameters(ssmClient: SSMClient, nextToken?: string): Promise<
     // Usar el sintetizador heredado para LocalStack (no requiere bootstrap)
     synthesizer: new cdk.LegacyStackSynthesizer(),
     eventBusName: params[`${basePath}/eventbridge/eventbus_name`],
-    parameterTableName: params[`${basePath}/dynamodb/parameter/dynamodb_table_name`],
+    parameterTableName: params[`${basePath}/dynamo/parameter-table-name`],
     s3GitFilesBucketName: params[`${basePath}/s3/git-commit-files/bucket_name`],
     aesKeyPath: '/tvo/security-scan/localstack/aes_secret',
 
