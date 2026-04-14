@@ -93,13 +93,13 @@ inputs = {
     ]
   })
   environment_variables = {
-    AWS_STAGE                = local.serverless.locals.stage
-    LOG_LEVEL                = local.serverless.locals.stage != "prod" ? "debug" : "info"
-    TITVO_EVENT_BUS_NAME     = dependency.parameters.outputs.parameters["${local.base_path}/infra/eventbridge/eventbus_name"]
-    PARAMETER_TABLE_NAME     = dependency.parameters.outputs.parameters["${local.base_path}/infra/dynamo/parameter-table-name"]
-    S3_GIT_FILES_BUCKET_NAME = dependency.parameters.outputs.parameters["${local.base_path}/infra/s3/git-commit-files/bucket_name"]
-    AES_KEY_PATH             = dependency.parameters.outputs.parameters["${local.base_path}/infra/kms/encryption-key-name"]
-    NODE_OPTIONS             = "--enable-source-maps",
+    AWS_STAGE                      = local.serverless.locals.stage
+    LOG_LEVEL                      = local.serverless.locals.stage != "prod" ? "debug" : "info"
+    TITVO_EVENT_BUS_NAME           = dependency.parameters.outputs.parameters["${local.base_path}/infra/eventbridge/eventbus_name"]
+    TITVO_PARAMETER_TABLE_NAME     = dependency.parameters.outputs.parameters["${local.base_path}/infra/dynamo/parameter-table-name"]
+    TITVO_S3_GIT_FILES_BUCKET_NAME = dependency.parameters.outputs.parameters["${local.base_path}/infra/s3/git-commit-files/bucket_name"]
+    TITVO_AES_KEY_PATH             = dependency.parameters.outputs.parameters["${local.base_path}/infra/kms/encryption-key-name"]
+    NODE_OPTIONS                   = "--enable-source-maps",
   }
   event_sources_arn = [
     dependency.parameters.outputs.parameters["${local.base_path}/infra/sqs/mcp/git-commit-files/input/queue_arn"]

@@ -39,9 +39,9 @@ export class AppStack extends cdk.Stack {
         AWS_STAGE: 'localstack',
         LOG_LEVEL: 'debug',
         TITVO_EVENT_BUS_NAME: props.eventBusName,
-        PARAMETER_TABLE_NAME: props.parameterTableName,
-        S3_GIT_FILES_BUCKET_NAME: props.s3GitFilesBucketName,
-        AES_KEY_PATH: props.aesKeyPath,
+        TITVO_PARAMETER_TABLE_NAME: props.parameterTableName,
+        TITVO_S3_GIT_FILES_BUCKET_NAME: props.s3GitFilesBucketName,
+        TITVO_AES_KEY_PATH: props.aesKeyPath,
         NODE_OPTIONS: '--enable-source-maps',
       },
     });

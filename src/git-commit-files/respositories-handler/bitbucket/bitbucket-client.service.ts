@@ -80,7 +80,7 @@ export class BitbucketClientService implements RepoClient {
     const token = await this.getAPIToken();
     return {
       headers: {
-        Authorization: token,
+        Authorization: `Basic ${token}`,
       },
     };
   }
