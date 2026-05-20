@@ -1,5 +1,9 @@
 terraform {
   source = "git::https://github.com/KaribuLab/terraform-aws-parameter-lookup.git?ref=v0.1.0"
+  extra_arguments "disable_backend" {
+    commands  = ["init"]
+    arguments = ["-backend=false"]
+  }
 }
 
 locals {
@@ -7,8 +11,14 @@ locals {
   base_path  = "${local.serverless.locals.parameter_path}/${local.serverless.locals.stage}/infra"
 }
 
-include {
-  path = find_in_parent_folders()
+generate "provider" {
+  path      = "provider.tf"
+  if_exists = "overwrite_terragrunt"
+  contents  = <<EOF
+provider "aws" {
+  region = "${local.serverless.locals.region}"
+}
+EOF
 }
 
 inputs = {
