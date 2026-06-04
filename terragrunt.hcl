@@ -6,6 +6,15 @@ generate "provider" {
   path      = "provider.tf"
   if_exists = "overwrite_terragrunt"
   contents  = <<EOF
+  terraform {
+    required_providers {
+      aws = {
+        source  = "hashicorp/aws"
+        version = "6.46.0"
+      }
+    }
+  }
+
   provider "aws" {
     region = "${local.serverless.locals.region}"
   }
