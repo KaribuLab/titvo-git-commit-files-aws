@@ -7,6 +7,9 @@ export class GitCommitFilesInputDto {
   data: {
     commitId: string
     repository: string
+    scanMode?: string
+    branch?: string
+    scanRef?: string
   }
 }
 
@@ -21,5 +24,8 @@ export interface GitCommitFilesOutputDto extends BaseOutputDto {
   data: {
     filesPaths: string[]
     commitId?: string
+    scanMode?: string
+    scanRef?: string
+    storagePrefix?: string
   }
 }

@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing'
 import { GitHubClientService } from './github-client.service'
-import { ConfigService } from '@nestjs/config'
+import { ParameterService } from '@lambda/parameter/parameter.service'
 import { FileInfo } from '../repo.client'
 
 // ==========================================
@@ -8,6 +8,7 @@ import { FileInfo } from '../repo.client'
 // ==========================================
 const mockGetCommit = jest.fn()
 const mockGetContent = jest.fn()
+const mockGetTree = jest.fn()
 
 jest.mock('@octokit/rest', () => {
   return {
@@ -16,6 +17,9 @@ jest.mock('@octokit/rest', () => {
         repos: {
           getCommit: mockGetCommit,
           getContent: mockGetContent
+        },
+        git: {
+          getTree: mockGetTree
         }
       }
     }))
@@ -30,8 +34,12 @@ describe('GitHubClientService', () => {
       providers: [
         GitHubClientService,
         {
-          provide: ConfigService,
-          useValue: { get: jest.fn().mockReturnValue('fake-token') }
+          provide: ParameterService,
+          useValue: {
+            getDecryptedParameterValue: jest
+              .fn()
+              .mockResolvedValue('fake-token')
+          }
         }
       ]
     }).compile()
@@ -41,6 +49,7 @@ describe('GitHubClientService', () => {
     // Resetear mocks antes de cada test
     mockGetCommit.mockReset()
     mockGetContent.mockReset()
+    mockGetTree.mockReset()
   })
 
   it('should be defined', () => {
@@ -78,6 +87,41 @@ describe('GitHubClientService', () => {
 
     const buffer = await service.downloadFile('file1.ts', 'abc123')
     expect(buffer.toString()).toBe('hello world')
+  })
+
+  it('should fetch all regular files from repository tree', async () => {
+    mockGetCommit.mockResolvedValue({
+      data: { commit: { tree: { sha: 'tree-sha' } } }
+    })
+    mockGetTree.mockResolvedValue({
+      data: {
+        tree: [
+          { type: 'blob', path: 'src/app.ts' },
+          { type: 'tree', path: 'src' },
+          { type: 'blob', path: 'README.md' }
+        ]
+      }
+    })
+
+    service.initFromRepoUrl('https://github.com/user/repo.git')
+
+    const files = await service.getAllFiles('main')
+
+    expect(mockGetCommit).toHaveBeenCalledWith({
+      owner: 'user',
+      repo: 'repo',
+      ref: 'main'
+    })
+    expect(mockGetTree).toHaveBeenCalledWith({
+      owner: 'user',
+      repo: 'repo',
+      tree_sha: 'tree-sha',
+      recursive: 'true'
+    })
+    expect(files).toEqual([
+      { path: 'src/app.ts', filename: 'src/app.ts' },
+      { path: 'README.md', filename: 'README.md' }
+    ])
   })
 
   it('should throw if getContent returns array (directory)', async () => {

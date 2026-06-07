@@ -11,6 +11,9 @@ import { inspect } from 'util'
 import { EventBridgeService } from '@lambda/aws/eventbridge'
 import { ConfigKeys } from '@lambda/config/config.key'
 
+const DEFAULT_SCAN_MODE = 'commit'
+const FULL_SCAN_MODE = 'full'
+
 /**
  * Main service that handles the complete commit processing flow.
  * It detects the provider, fetches the modified files, and uploads them to S3.
@@ -39,29 +42,38 @@ export class GitCommitFilesService {
     let success = false
     let message = ''
     let filesPaths: string[] = []
+    const scanMode = data.scanMode ?? DEFAULT_SCAN_MODE
+    const scanRef = scanMode === FULL_SCAN_MODE ? data.scanRef ?? data.branch : data.commitId
+    const storagePrefix = scanMode === FULL_SCAN_MODE ? `full/${jobId}` : data.commitId
 
     const jobCorrelationId = `[Job: ${jobId}]`
 
     this.logger.log(
-      `Starting commit processing for ${data.commitId} in repository ${data.repository}...`,
+      `Starting ${scanMode} processing for ${data.commitId} in repository ${data.repository}...`,
       jobCorrelationId
     )
 
     try {
+      if (scanMode === FULL_SCAN_MODE && !scanRef) {
+        throw new Error('branch or scanRef is required for full scan mode')
+      }
+
       const repoClient = this.repoFactory.getClientForRepoUrl(data.repository)
 
       // Fetch files
-      const files: FileInfo[] = await repoClient.getCommitFiles(data.commitId)
-      this.logger.log(`Found ${files.length} modified files.`, jobCorrelationId)
+      const files: FileInfo[] = scanMode === FULL_SCAN_MODE
+        ? await repoClient.getAllFiles(scanRef as string)
+        : await repoClient.getCommitFiles(data.commitId)
+      this.logger.log(`Found ${files.length} files.`, jobCorrelationId)
 
       // Upload files to S3
       filesPaths = await this.s3Service.initETLBatch(
-        { files, commitId: data.commitId },
+        { files, ref: scanRef as string, storagePrefix },
         repoClient
       )
 
       success = true
-      message = `Commit ${data.commitId} processed successfully.`
+      message = `${scanMode} scan files processed successfully.`
       this.logger.log('All files processed successfully.', jobCorrelationId)
     } catch (error) {
       // Better error handling/logging
@@ -86,7 +98,10 @@ export class GitCommitFilesService {
         success,
         message,
         data.commitId,
-        filesPaths
+        filesPaths,
+        scanMode,
+        scanRef,
+        storagePrefix
       )
     }
 
@@ -95,7 +110,7 @@ export class GitCommitFilesService {
       jobId: jobId,
       success,
       message,
-      data: { filesPaths, commitId: data.commitId }
+      data: { filesPaths, commitId: data.commitId, scanMode, scanRef, storagePrefix }
     }
   }
 
@@ -112,7 +127,10 @@ export class GitCommitFilesService {
     success: boolean,
     message: string,
     commitId: string,
-    filesPaths: string[]
+    filesPaths: string[],
+    scanMode: string,
+    scanRef: string | undefined,
+    storagePrefix: string
   ): Promise<void> {
     const eventBusName = this.configService.get<string>(
       ConfigKeys.TITVO_EVENT_BUS_NAME
@@ -136,7 +154,10 @@ export class GitCommitFilesService {
             message: message,
             data: {
               commit_id: commitId,
-              files_paths: filesPaths
+              files_paths: filesPaths,
+              scan_mode: scanMode,
+              scan_ref: scanRef,
+              storage_prefix: storagePrefix
             }
           }),
           EventBusName: eventBusName

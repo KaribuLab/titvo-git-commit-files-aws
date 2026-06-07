@@ -1,11 +1,11 @@
 import type { Config } from '@jest/types';
 
 const config: Config.InitialOptions = {
-  preset: 'ts-jest/presets/default-esm', // importante para ESM
   testEnvironment: 'node',
-  extensionsToTreatAsEsm: ['.ts'],
   transform: {
-    '^.+\\.ts$': ['ts-jest', { useESM: true }],
+    // Compilamos los tests a CommonJS para que los globals de Jest (jest, describe,
+    // expect, etc.) esten disponibles sin necesidad de importarlos en cada archivo.
+    '^.+\\.ts$': ['ts-jest', { tsconfig: { module: 'commonjs' } }],
   },
   moduleNameMapper: {
     '^@lambda/(.*)$': '<rootDir>/src/$1',

@@ -16,6 +16,10 @@ import {
 } from '@lambda/aws'
 import { ParameterService } from '@lambda/parameter/parameter.service'
 import { GitCommitFilesInputDto } from './git-commit-files.dto'
+import { ConfigKeys } from '@lambda/config/config.key'
+
+// El S3ParallelETLService valida en onModuleInit que exista el bucket de S3.
+process.env[ConfigKeys.S3_BUCKET_NAME] = 'test-bucket'
 
 jest.mock('@octokit/rest', () => ({
   Octokit: jest.fn().mockImplementation(() => ({
@@ -37,13 +41,17 @@ const mockUploadFile = jest.fn()
 // Mock de RepoClient
 const repoClientMock: RepoClient & {
   initFromRepoUrl: jest.Mock<void, [string]>
-  getCommitFiles: jest.Mock<Promise<FileInfo[]>, [string, string]>
-  downloadFile: jest.Mock<Promise<Buffer>, [string, string, string]>
+  getCommitFiles: jest.Mock<Promise<FileInfo[]>, [string]>
+  getAllFiles: jest.Mock<Promise<FileInfo[]>, [string]>
+  downloadFile: jest.Mock<Promise<Buffer>, [string, string]>
 } = {
   initFromRepoUrl: jest.fn(),
   getCommitFiles: jest
     .fn()
     .mockResolvedValue([{ path: 'file1.ts', filename: 'file1.ts' }]),
+  getAllFiles: jest
+    .fn()
+    .mockResolvedValue([{ path: 'src/full.ts', filename: 'src/full.ts' }]),
   downloadFile: jest.fn().mockResolvedValue(Buffer.from('dummy content'))
 }
 
@@ -122,15 +130,27 @@ describe('GitCommitFilesService', () => {
       .useModule(MockAwsModule)
       .overrideModule(ParameterModule) // ANULAR PARAMETER MODULE
       .useModule(MockParameterModule)
+      // Garantizamos que el S3Service inyectado sea el mock en cualquier scope
+      .overrideProvider(S3Service)
+      .useValue({ uploadFile: mockUploadFile })
       .compile()
+
+    // Ejecuta los hooks OnModuleInit (configura pLimit y bucket en S3ParallelETLService)
+    await module.init()
 
     service = module.get<GitCommitFilesService>(GitCommitFilesService) // Reset de mocks
 
     mockUploadFile.mockReset()
     repoClientMock.initFromRepoUrl.mockReset()
+    repoClientMock.getCommitFiles.mockClear()
     repoClientMock.getCommitFiles.mockResolvedValue([
       { path: 'file1.ts', filename: 'file1.ts' }
     ])
+    repoClientMock.getAllFiles.mockClear()
+    repoClientMock.getAllFiles.mockResolvedValue([
+      { path: 'src/full.ts', filename: 'src/full.ts' }
+    ])
+    repoClientMock.downloadFile.mockClear()
     repoClientMock.downloadFile.mockResolvedValue(Buffer.from('dummy content'))
     repoFactoryMock.getClientForRepoUrl.mockClear()
   })
@@ -145,9 +165,7 @@ describe('GitCommitFilesService', () => {
     const input: GitCommitFilesInputDto = {
       data: {
         commitId: 'abc123',
-        branch: 'main',
-        repository: 'https://bitbucket.org/workspace/repo.git',
-        status: 'success'
+        repository: 'https://bitbucket.org/workspace/repo.git'
       },
       jobId: '1'
     }
@@ -155,38 +173,79 @@ describe('GitCommitFilesService', () => {
     const result = await service.process(input) // Verifica que el RepoClient se haya usado
 
     expect(repoFactoryMock.getClientForRepoUrl).toHaveBeenCalledWith(
-      input.repository
+      input.data.repository
     )
     expect(repoClientMock.getCommitFiles).toHaveBeenCalledWith(
-      input.commitId,
-      input.branch
+      input.data.commitId
     )
     expect(repoClientMock.downloadFile).toHaveBeenCalledWith(
       'file1.ts',
-      input.commitId,
-      input.branch
-    ) // Verifica que S3 haya recibido el archivo
+      input.data.commitId
+    )
 
+    // S3 recibe (bucket, key, buffer)
     expect(mockUploadFile).toHaveBeenCalledWith(
-      `${input.commitId}/file1.ts`,
+      expect.any(String),
+      `${input.data.commitId}/file1.ts`,
       expect.any(Buffer)
-    ) // Validación del resultado final
+    )
 
+    // Validación del resultado final
     expect(result.success).toBe(true)
-    expect(result.data.uploadedFiles).toEqual([`${input.commitId}/file1.ts`])
+    expect(result.data.filesPaths).toEqual([`${input.data.commitId}/file1.ts`])
+    expect(result.data.scanMode).toBe('commit')
+    expect(result.data.storagePrefix).toBe(input.data.commitId)
   })
 
-  it('should skip processing if status is not success', async () => {
-    const input = {
-      commitId: 'abc123',
-      branch: 'main',
-      repository: 'https://bitbucket.org/workspace/repo.git',
-      status: 'failed'
+  it('should process full scan and upload files with full storage prefix', async () => {
+    mockUploadFile.mockResolvedValue(undefined)
+
+    const input: GitCommitFilesInputDto = {
+      data: {
+        commitId: 'abc123',
+        repository: 'https://bitbucket.org/workspace/repo.git',
+        scanMode: 'full',
+        branch: 'main'
+      },
+      jobId: '1'
     }
 
-    const result = await service.process(input as any)
+    const result = await service.process(input)
+
+    expect(repoClientMock.getAllFiles).toHaveBeenCalledWith('main')
+    expect(repoClientMock.getCommitFiles).not.toHaveBeenCalled()
+    expect(repoClientMock.downloadFile).toHaveBeenCalledWith('src/full.ts', 'main')
+    expect(mockUploadFile).toHaveBeenCalledWith(
+      expect.any(String),
+      'full/1/src/full.ts',
+      expect.any(Buffer)
+    )
+    expect(result.success).toBe(true)
+    expect(result.data).toEqual({
+      filesPaths: ['full/1/src/full.ts'],
+      commitId: 'abc123',
+      scanMode: 'full',
+      scanRef: 'main',
+      storagePrefix: 'full/1'
+    })
+  })
+
+  it('should return success=false when file processing throws', async () => {
+    repoClientMock.getCommitFiles.mockRejectedValueOnce(
+      new Error('boom')
+    )
+
+    const input: GitCommitFilesInputDto = {
+      data: {
+        commitId: 'abc123',
+        repository: 'https://bitbucket.org/workspace/repo.git'
+      },
+      jobId: '1'
+    }
+
+    const result = await service.process(input)
 
     expect(result.success).toBe(false)
-    expect(result.data.uploadedFiles).toEqual([])
+    expect(result.data.filesPaths).toEqual([])
   })
 })

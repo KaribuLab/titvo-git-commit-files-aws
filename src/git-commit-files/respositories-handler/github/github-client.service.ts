@@ -77,11 +77,33 @@ export class GitHubClientService implements RepoClient {
     return files
   }
 
+  async getAllFiles(ref: string): Promise<FileInfo[]> {
+    this.logger.log(`Fetching all files for ${this.owner}/${this.repo} @ ${ref}`)
+
+    const client = await this.getOctokitClient()
+    const commit = await client.rest.repos.getCommit({
+      owner: this.owner,
+      repo: this.repo,
+      ref
+    })
+
+    const tree = await client.rest.git.getTree({
+      owner: this.owner,
+      repo: this.repo,
+      tree_sha: commit.data.commit.tree.sha,
+      recursive: 'true'
+    })
+
+    return (tree.data.tree || [])
+      .filter((entry) => entry.type === 'blob' && typeof entry.path === 'string')
+      .map((entry) => ({ path: entry.path as string, filename: entry.path as string }))
+  }
+
   /**
    * Descarga el contenido de un archivo de un commit específico
    */
-  async downloadFile(path: string, commitId: string): Promise<Buffer> {
-    this.logger.log(`Downloading file ${path} @ commit ${commitId}`)
+  async downloadFile(path: string, ref: string): Promise<Buffer> {
+    this.logger.log(`Downloading file ${path} @ ${ref}`)
 
     const client = await this.getOctokitClient()
 
@@ -89,7 +111,7 @@ export class GitHubClientService implements RepoClient {
       owner: this.owner,
       repo: this.repo,
       path,
-      ref: commitId
+      ref
     })
 
     if (Array.isArray(resp.data)) {

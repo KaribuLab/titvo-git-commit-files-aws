@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import axios, { AxiosRequestConfig } from "axios";
+import axios, { AxiosRequestConfig, AxiosResponse } from "axios";
 import { RepoClient, FileInfo } from "../repo.client";
 import { inspect } from "util";
 import { ParameterService } from "@lambda/parameter/parameter.service";
@@ -39,15 +39,14 @@ export class BitbucketClientService implements RepoClient {
       `Bitbucket getting files for commit ${commitId} in ${this.workspace}/${this.repoSlug}`,
     );
 
-    const filesFromCommit =
-      await this.getCommitFilesFromCommitEndpoint(commitId);
+    const filesFromDiffstat = await this.getCommitFilesFromDiffstat(commitId);
 
-    if (filesFromCommit) {
-      return filesFromCommit;
+    if (filesFromDiffstat) {
+      return filesFromDiffstat;
     }
 
     this.logger.log(
-      `Strategy 1 (commit) failed, falling back to Strategy 2 (src) for ${commitId}`,
+      `Strategy 1 (diffstat) failed, falling back to Strategy 2 (src) for ${commitId}`,
     );
     return this.getCommitFilesFromSrcEndpoint(commitId);
   }
@@ -71,6 +70,46 @@ export class BitbucketClientService implements RepoClient {
 
     // Si la respuesta es exitosa, res.data es el contenido del archivo.
     return Buffer.from(res.data);
+  }
+
+  async getAllFiles(ref: string): Promise<FileInfo[]> {
+    this.logger.log(
+      `Bitbucket listing all files for ${this.workspace}/${this.repoSlug} @ ${ref}`,
+    );
+
+    const files: FileInfo[] = [];
+    const authConfig = await this.getAuthHeaders();
+    let pendingUrls: string[] = [
+      `${this.apiBase}/repositories/${this.workspace}/${this.repoSlug}/src/${ref}/?pagelen=100`,
+    ];
+
+    while (pendingUrls.length > 0) {
+      const currentUrl = pendingUrls.shift() as string;
+      let nextUrl: string | null = currentUrl;
+
+      while (nextUrl) {
+        const res: AxiosResponse = await axios.get(nextUrl, authConfig);
+        const data: any = res.data;
+
+        if (!data || !Array.isArray(data.values)) {
+          throw new Error(`Bitbucket src endpoint did not return values for ${ref}`);
+        }
+
+        for (const value of data.values) {
+          if (value.type === "commit_file") {
+            files.push({ path: value.path, filename: value.path });
+          } else if (value.type === "commit_directory" && value.path) {
+            pendingUrls.push(
+              `${this.apiBase}/repositories/${this.workspace}/${this.repoSlug}/src/${ref}/${value.path}?pagelen=100`,
+            );
+          }
+        }
+
+        nextUrl = typeof data.next === "string" ? data.next : null;
+      }
+    }
+
+    return files;
   }
 
   /**
@@ -110,36 +149,59 @@ export class BitbucketClientService implements RepoClient {
   }
 
   /**
-   * Intenta obtener los archivos usando el endpoint /commit/{hash}/.
-   * Devuelve 'null' si no encuentra los archivos para intentar otra estrategia.
+   * Intenta obtener los archivos modificados usando el endpoint /diffstat/{hash}.
+   *
+   * Este endpoint devuelve la lista paginada de cambios del commit (comparado
+   * contra su primer padre). Cada entrada trae 'status' y los objetos 'old'/'new'
+   * con su 'path'. Aqui solo extraemos las rutas que siguen existiendo en el
+   * commit (added/modified/renamed) para poder descargarlas completas despues.
+   * Se omiten los archivos eliminados porque ya no se pueden descargar.
+   *
+   * Devuelve 'null' si la respuesta no tiene la forma esperada o falla, para
+   * intentar otra estrategia.
    */
-  private async getCommitFilesFromCommitEndpoint(
+  private async getCommitFilesFromDiffstat(
     commitId: string,
   ): Promise<FileInfo[] | null> {
-    const url = `${this.apiBase}/repositories/${this.workspace}/${this.repoSlug}/commit/${commitId}/`;
     try {
       const authConfig = await this.getAuthHeaders();
+      const files: FileInfo[] = [];
 
-      const res = await axios.get(url, authConfig);
+      let nextUrl: string | null = `${this.apiBase}/repositories/${this.workspace}/${this.repoSlug}/diffstat/${commitId}?pagelen=500`;
 
-      if (res.data && res.data.files && Array.isArray(res.data.files)) {
-        this.logger.log(
-          `Strategy 1 (commit endpoint) succeeded for ${commitId}`,
-        );
-        const files: FileInfo[] = [];
-        for (const f of res.data.files) {
-          files.push({ path: f.path, filename: f.path });
+      while (nextUrl) {
+        const res: AxiosResponse = await axios.get(nextUrl, authConfig);
+        const data: any = res.data;
+
+        if (!data || !Array.isArray(data.values)) {
+          this.logger.log(
+            `Strategy 1 (diffstat) did not return 'values' array for ${commitId}.`,
+          );
+          return null;
         }
-        return files;
+
+        for (const change of data.values) {
+          // Los archivos eliminados no existen en este commit, no se descargan.
+          if (change?.status === "removed") {
+            continue;
+          }
+          // Para added/modified/renamed el path vigente esta en 'new'.
+          const path: string | undefined = change?.new?.path;
+          if (path) {
+            files.push({ path, filename: path });
+          }
+        }
+
+        nextUrl = typeof data.next === "string" ? data.next : null;
       }
 
       this.logger.log(
-        `Strategy 1 (commit endpoint) did not return 'files' array for ${commitId}.`,
+        `Strategy 1 (diffstat) succeeded for ${commitId} with ${files.length} files`,
       );
-      return null;
+      return files;
     } catch (err) {
       this.logger.warn(
-        `Strategy 1 (commit endpoint) failed with error for ${commitId}: ${(err as Error).message}`,
+        `Strategy 1 (diffstat) failed with error for ${commitId}: ${(err as Error).message}`,
       );
       return null;
     }

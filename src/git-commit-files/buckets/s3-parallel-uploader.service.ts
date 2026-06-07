@@ -14,9 +14,10 @@ export interface FileUploadTask {
 
 const DEFAULT_MAX_CONCURRENCY = 10
 
-interface CommitData {
+interface FileBatchData {
   files: FileInfo[]
-  commitId: string
+  ref: string
+  storagePrefix: string
 }
 
 @Injectable()
@@ -60,23 +61,23 @@ export class S3ParallelETLService implements OnModuleInit {
    * @returns Promise that resolves with the S3 keys of the successfully uploaded files.
    */
   async initETLBatch(
-    commitData: CommitData,
+    fileBatchData: FileBatchData,
     repoClient: RepoClient
   ): Promise<string[]> {
     this.logger.log(
-      `Starting parallel upload for ${commitData.files.length} files...`
+      `Starting parallel upload for ${fileBatchData.files.length} files...`
     )
-    const uploadPromises = commitData.files.map((file) =>
+    const uploadPromises = fileBatchData.files.map((file) =>
       this.limit(async () => {
         try {
           this.logger.log(`Downloading file: ${file.path}`)
 
           const fileBuffer = await repoClient.downloadFile(
             file.path,
-            commitData.commitId
+            fileBatchData.ref
           )
 
-          const s3Key = `${commitData.commitId}/${file.path}`
+          const s3Key = `${fileBatchData.storagePrefix}/${file.path}`
 
           await this.s3Service.uploadFile(this.bucketName, s3Key, fileBuffer)
 
@@ -96,12 +97,12 @@ export class S3ParallelETLService implements OnModuleInit {
     const uploadedKeys = results.filter((key): key is string => key !== null)
 
     this.logger.log(
-      `Batch upload finished. ${uploadedKeys.length} out of ${commitData.files.length} files uploaded successfully.`
+      `Batch upload finished. ${uploadedKeys.length} out of ${fileBatchData.files.length} files uploaded successfully.`
     )
 
-    if (uploadedKeys.length !== commitData.files.length) {
+    if (uploadedKeys.length !== fileBatchData.files.length) {
       this.logger.warn(
-        `Attention: ${commitData.files.length - uploadedKeys.length} uploads failed.`
+        `Attention: ${fileBatchData.files.length - uploadedKeys.length} uploads failed.`
       )
     }
 

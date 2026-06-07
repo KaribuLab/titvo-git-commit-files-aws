@@ -38,6 +38,9 @@ interface GitCommitFilesEvent {
     data: {
       repository: string,
       commit_id: string,
+      scan_mode?: string,
+      branch?: string,
+      scan_ref?: string,
     }
   }
 }
@@ -61,6 +64,9 @@ export const handler: Handler<SQSEvent> = async (
           data: {
             repository: record.detail.data.repository,
             commitId: record.detail.data.commit_id,
+            scanMode: record.detail.data.scan_mode,
+            branch: record.detail.data.branch,
+            scanRef: record.detail.data.scan_ref,
           }
         })
       })

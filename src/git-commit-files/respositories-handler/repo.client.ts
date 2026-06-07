@@ -6,5 +6,6 @@ export interface FileInfo {
 export interface RepoClient {
   initFromRepoUrl(repoUrl: string): void
   getCommitFiles(commitId: string): Promise<FileInfo[]>
-  downloadFile(path: string, commitId: string): Promise<Buffer>
+  getAllFiles(ref: string): Promise<FileInfo[]>
+  downloadFile(path: string, ref: string): Promise<Buffer>
 }

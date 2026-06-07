@@ -5,6 +5,7 @@
     "clean": "rimraf dist build",
     "build": "npm run clean && rspack build",
     "dev": "turbowatch",
+    "test": "jest",
     "lint": "eslint ./src/**/*.{ts,js} --fix"
   },
   "keywords": [
