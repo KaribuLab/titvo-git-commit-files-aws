@@ -197,6 +197,32 @@ describe('BitbucketClientService', () => {
     )
   })
 
+  it('should resolve branch names with slash to their target hash', async () => {
+    mockedAxios.get.mockResolvedValueOnce({
+      data: {
+        name: 'feature/titvo-integration',
+        target: { hash: 'branch-head-sha' }
+      }
+    })
+
+    service.initFromRepoUrl('https://bitbucket.org/workspace/repo.git')
+    const ref = await service.resolveRef('feature/titvo-integration')
+
+    expect(ref).toBe('branch-head-sha')
+    expect(mockedAxios.get).toHaveBeenCalledWith(
+      expect.stringContaining('/refs/branches/feature%2Ftitvo-integration'),
+      expect.any(Object)
+    )
+  })
+
+  it('should return full commit hashes without resolving branch metadata', async () => {
+    service.initFromRepoUrl('https://bitbucket.org/workspace/repo.git')
+    const hash = 'ee557ad24e6c63aa32203d36fba3724f342f62e0'
+
+    await expect(service.resolveRef(hash)).resolves.toBe(hash)
+    expect(mockedAxios.get).not.toHaveBeenCalled()
+  })
+
   it('should throw if credentials are not found in Parameter Store', async () => {
     // Simular que el token no existe en Parameter Store
     mockParameterService.getDecryptedParameterValue.mockResolvedValue(undefined)

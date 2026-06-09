@@ -42,6 +42,7 @@ const mockUploadFile = jest.fn()
 const repoClientMock: RepoClient & {
   initFromRepoUrl: jest.Mock<void, [string]>
   getCommitFiles: jest.Mock<Promise<FileInfo[]>, [string]>
+  resolveRef: jest.Mock<Promise<string>, [string]>
   getAllFiles: jest.Mock<Promise<FileInfo[]>, [string]>
   downloadFile: jest.Mock<Promise<Buffer>, [string, string]>
 } = {
@@ -49,6 +50,7 @@ const repoClientMock: RepoClient & {
   getCommitFiles: jest
     .fn()
     .mockResolvedValue([{ path: 'file1.ts', filename: 'file1.ts' }]),
+  resolveRef: jest.fn().mockResolvedValue('branch-head-sha'),
   getAllFiles: jest
     .fn()
     .mockResolvedValue([{ path: 'src/full.ts', filename: 'src/full.ts' }]),
@@ -146,6 +148,8 @@ describe('GitCommitFilesService', () => {
     repoClientMock.getCommitFiles.mockResolvedValue([
       { path: 'file1.ts', filename: 'file1.ts' }
     ])
+    repoClientMock.resolveRef.mockClear()
+    repoClientMock.resolveRef.mockResolvedValue('branch-head-sha')
     repoClientMock.getAllFiles.mockClear()
     repoClientMock.getAllFiles.mockResolvedValue([
       { path: 'src/full.ts', filename: 'src/full.ts' }
@@ -212,9 +216,10 @@ describe('GitCommitFilesService', () => {
 
     const result = await service.process(input)
 
-    expect(repoClientMock.getAllFiles).toHaveBeenCalledWith('main')
+    expect(repoClientMock.resolveRef).toHaveBeenCalledWith('main')
+    expect(repoClientMock.getAllFiles).toHaveBeenCalledWith('branch-head-sha')
     expect(repoClientMock.getCommitFiles).not.toHaveBeenCalled()
-    expect(repoClientMock.downloadFile).toHaveBeenCalledWith('src/full.ts', 'main')
+    expect(repoClientMock.downloadFile).toHaveBeenCalledWith('src/full.ts', 'branch-head-sha')
     expect(mockUploadFile).toHaveBeenCalledWith(
       expect.any(String),
       'full/1/src/full.ts',
@@ -225,9 +230,36 @@ describe('GitCommitFilesService', () => {
       filesPaths: ['full/1/src/full.ts'],
       commitId: 'abc123',
       scanMode: 'full',
-      scanRef: 'main',
+      scanRef: 'branch-head-sha',
       storagePrefix: 'full/1'
     })
+  })
+
+  it('should resolve slash branch names before full scan listing', async () => {
+    mockUploadFile.mockResolvedValue(undefined)
+    repoClientMock.resolveRef.mockResolvedValueOnce('slash-branch-head')
+
+    const input: GitCommitFilesInputDto = {
+      data: {
+        commitId: 'abc123',
+        repository: 'https://bitbucket.org/workspace/repo.git',
+        scanMode: 'full',
+        branch: 'feature/titvo-integration'
+      },
+      jobId: '1'
+    }
+
+    const result = await service.process(input)
+
+    expect(repoClientMock.resolveRef).toHaveBeenCalledWith(
+      'feature/titvo-integration'
+    )
+    expect(repoClientMock.getAllFiles).toHaveBeenCalledWith('slash-branch-head')
+    expect(repoClientMock.downloadFile).toHaveBeenCalledWith(
+      'src/full.ts',
+      'slash-branch-head'
+    )
+    expect(result.data.scanRef).toBe('slash-branch-head')
   })
 
   it('should return success=false when file processing throws', async () => {

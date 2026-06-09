@@ -124,6 +124,23 @@ describe('GitHubClientService', () => {
     ])
   })
 
+  it('should resolve a ref to the commit sha', async () => {
+    mockGetCommit.mockResolvedValue({
+      data: { sha: 'branch-head-sha' }
+    })
+
+    service.initFromRepoUrl('https://github.com/user/repo.git')
+
+    const ref = await service.resolveRef('feature/titvo-integration')
+
+    expect(ref).toBe('branch-head-sha')
+    expect(mockGetCommit).toHaveBeenCalledWith({
+      owner: 'user',
+      repo: 'repo',
+      ref: 'feature/titvo-integration'
+    })
+  })
+
   it('should throw if getContent returns array (directory)', async () => {
     mockGetContent.mockResolvedValue({ data: [] })
 

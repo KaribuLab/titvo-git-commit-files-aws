@@ -43,7 +43,8 @@ export class GitCommitFilesService {
     let message = ''
     let filesPaths: string[] = []
     const scanMode = data.scanMode ?? DEFAULT_SCAN_MODE
-    const scanRef = scanMode === FULL_SCAN_MODE ? data.scanRef ?? data.branch : data.commitId
+    const requestedRef = scanMode === FULL_SCAN_MODE ? data.scanRef ?? data.branch : data.commitId
+    let scanRef = scanMode === FULL_SCAN_MODE ? requestedRef : data.commitId
     const storagePrefix = scanMode === FULL_SCAN_MODE ? `full/${jobId}` : data.commitId
 
     const jobCorrelationId = `[Job: ${jobId}]`
@@ -54,16 +55,20 @@ export class GitCommitFilesService {
     )
 
     try {
-      if (scanMode === FULL_SCAN_MODE && !scanRef) {
+      if (scanMode === FULL_SCAN_MODE && !requestedRef) {
         throw new Error('branch or scanRef is required for full scan mode')
       }
 
       const repoClient = this.repoFactory.getClientForRepoUrl(data.repository)
 
       // Fetch files
-      const files: FileInfo[] = scanMode === FULL_SCAN_MODE
-        ? await repoClient.getAllFiles(scanRef as string)
-        : await repoClient.getCommitFiles(data.commitId)
+      let files: FileInfo[]
+      if (scanMode === FULL_SCAN_MODE) {
+        scanRef = await repoClient.resolveRef(requestedRef as string)
+        files = await repoClient.getAllFiles(scanRef)
+      } else {
+        files = await repoClient.getCommitFiles(data.commitId)
+      }
       this.logger.log(`Found ${files.length} files.`, jobCorrelationId)
 
       // Upload files to S3

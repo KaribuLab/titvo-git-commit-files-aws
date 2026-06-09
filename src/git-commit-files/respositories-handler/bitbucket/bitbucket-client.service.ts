@@ -112,6 +112,27 @@ export class BitbucketClientService implements RepoClient {
     return files;
   }
 
+  async resolveRef(ref: string): Promise<string> {
+    this.logger.log(
+      `Bitbucket resolving ref ${ref} for ${this.workspace}/${this.repoSlug}`,
+    );
+
+    if (/^[0-9a-f]{40}$/i.test(ref)) {
+      return ref;
+    }
+
+    const authConfig = await this.getAuthHeaders();
+    const branchUrl = `${this.apiBase}/repositories/${this.workspace}/${this.repoSlug}/refs/branches/${encodeURIComponent(ref)}`;
+    const res: AxiosResponse = await axios.get(branchUrl, authConfig);
+    const hash: string | undefined = res.data?.target?.hash;
+
+    if (!hash) {
+      throw new Error(`Bitbucket branch ${ref} did not return a target hash`);
+    }
+
+    return hash;
+  }
+
   /**
    * Genera el objeto de configuración de Axios con el Bearer Token.
    */

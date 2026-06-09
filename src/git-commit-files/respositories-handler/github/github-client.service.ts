@@ -99,6 +99,19 @@ export class GitHubClientService implements RepoClient {
       .map((entry) => ({ path: entry.path as string, filename: entry.path as string }))
   }
 
+  async resolveRef(ref: string): Promise<string> {
+    this.logger.log(`Resolving ref ${ref} for ${this.owner}/${this.repo}`)
+
+    const client = await this.getOctokitClient()
+    const commit = await client.rest.repos.getCommit({
+      owner: this.owner,
+      repo: this.repo,
+      ref
+    })
+
+    return commit.data.sha
+  }
+
   /**
    * Descarga el contenido de un archivo de un commit específico
    */
