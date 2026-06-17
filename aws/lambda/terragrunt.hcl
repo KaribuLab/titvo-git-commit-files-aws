@@ -106,6 +106,7 @@ inputs = {
   ]
   runtime       = "nodejs22.x"
   handler       = "src/entrypoint.handler"
+  timeout       = 300
   bucket        = local.serverless.locals.service_bucket
   file_location = "${get_parent_terragrunt_dir()}/build"
   zip_location  = "${get_parent_terragrunt_dir()}/dist"
