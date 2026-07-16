@@ -1,0 +1,47 @@
+name: Deploy to AWS with Terragrunt
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_TITVO_LAMBDA_ROLE_TO_ASSUME }}
+          aws-region: us-east-2
+
+      - name: Apply Terragrunt
+        uses: gruntwork-io/terragrunt-action@v2
+        with:
+          tf_version: "1.9.8"
+          tg_version: "0.69.1"
+          tg_dir: "aws"
+          tg_command: "run-all apply --terragrunt-non-interactive -auto-approve"
+        env:
+          AWS_REGION: us-east-2
+          AWS_STAGE: "prod"
