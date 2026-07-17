@@ -1,7 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { StringParameter } from 'aws-cdk-lib/aws-ssm';
-import { Function, Runtime, Code } from 'aws-cdk-lib/aws-lambda';
+import { DockerImageFunction, DockerImageCode } from 'aws-cdk-lib/aws-lambda';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { Queue } from 'aws-cdk-lib/aws-sqs';
 import * as path from 'path';
@@ -26,12 +26,12 @@ export class AppStack extends cdk.Stack {
       `arn:aws:sqs:${props?.env?.region || 'us-east-1'}:${props?.env?.account || '000000000000'}:tvo-mcp-git-commit-files-input-local`
     );
 
-    // Lambda Function
-    const lambdaFunction = new Function(this, 'GitCommitFilesFunction', {
+    // Lambda Function (imagen container para poder usar git + openssh-client)
+    const lambdaFunction = new DockerImageFunction(this, 'GitCommitFilesFunction', {
       functionName: 'mcp-git-commit-files-local',
-      runtime: Runtime.NODEJS_22_X,
-      handler: 'src/entrypoint.handler',
-      code: Code.fromAsset(path.join(__dirname, '../../dist/lambda.zip')),
+      code: DockerImageCode.fromImageAsset(path.join(__dirname, '../..'), {
+        file: 'Dockerfile',
+      }),
       timeout: cdk.Duration.seconds(300),
       memorySize: 512,
       description: 'Lambda function for MCP Git Commit Files',
