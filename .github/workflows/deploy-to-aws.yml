@@ -43,5 +43,6 @@ jobs:
           tg_dir: "aws"
           tg_command: "run-all apply --terragrunt-non-interactive -auto-approve"
         env:
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_TITVO_ACCOUNT_ID }}
           AWS_REGION: us-east-2
           AWS_STAGE: "prod"
