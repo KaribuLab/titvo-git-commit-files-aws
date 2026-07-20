@@ -20,18 +20,13 @@ export default defineConfig({
           await spawn`echo "Installing dependencies..."`;
           await spawn`npm install`;
           await spawn`cd cdklocal && npm install && npm run build`;
-          
-          await spawn`echo "Building lambda..."`;
-          await spawn`rm -rf dist build`;
-          await spawn`mkdir -p dist`;
-          await spawn`rspack build`;
-          
-          await spawn`echo "Creating lambda zip..."`;
-          await spawn`cd build && zip -r ../dist/lambda.zip .`;
-          
+
+          await spawn`echo "Building lambda container image..."`;
+          await spawn`docker build -t mcp-git-commit-files-local .`;
+
           await spawn`echo "Deploying to LocalStack..."`;
           await spawn`cd cdklocal && cdklocal deploy --require-approval=never`;
-          
+
           await spawn`echo "Deployment completed successfully!"`;
         } catch (error) {
           console.error('Error during build and deploy:', error);

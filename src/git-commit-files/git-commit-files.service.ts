@@ -5,7 +5,7 @@ import {
   GitCommitFilesOutputDto
 } from './git-commit-files.dto'
 import { RepoFactoryService } from './respositories-handler/repo-factory.service'
-import { FileInfo } from './respositories-handler/repo.client'
+import { FileInfo, RepoClient } from './respositories-handler/repo.client'
 import { S3ParallelETLService } from './buckets/s3-parallel-uploader.service'
 import { inspect } from 'util'
 import { EventBridgeService } from '@lambda/aws/eventbridge'
@@ -54,19 +54,27 @@ export class GitCommitFilesService {
       jobCorrelationId
     )
 
+    let repoClient: RepoClient | undefined
+
     try {
       if (scanMode === FULL_SCAN_MODE && !requestedRef) {
         throw new Error('branch or scanRef is required for full scan mode')
       }
 
-      const repoClient = this.repoFactory.getClientForRepoUrl(data.repository)
+      repoClient = this.repoFactory.getClientForRepoUrl(data.repository)
 
       // Fetch files
       let files: FileInfo[]
       if (scanMode === FULL_SCAN_MODE) {
         scanRef = await repoClient.resolveRef(requestedRef as string)
+        if ('prepare' in repoClient) {
+          await (repoClient as any).prepare(scanRef)
+        }
         files = await repoClient.getAllFiles(scanRef)
       } else {
+        if ('prepare' in repoClient) {
+          await (repoClient as any).prepare(data.commitId)
+        }
         files = await repoClient.getCommitFiles(data.commitId)
       }
       this.logger.log(`Found ${files.length} files.`, jobCorrelationId)
@@ -97,6 +105,17 @@ export class GitCommitFilesService {
       message = `Error processing commit: ${err.message}`
       filesPaths = [] // Ensure filesPaths is empty on failure
     } finally {
+      // Liberar recursos locales (clone SSH, llave) si el cliente lo soporta.
+      if (repoClient && 'cleanup' in repoClient) {
+        try {
+          await (repoClient as any).cleanup()
+        } catch (cleanupErr) {
+          this.logger.warn(
+            `cleanup failed: ${(cleanupErr as Error).message}`,
+            jobCorrelationId,
+          )
+        }
+      }
       // Always send the result event, regardless of success or failure
       await this.sendEventBridgeResult(
         jobId,
