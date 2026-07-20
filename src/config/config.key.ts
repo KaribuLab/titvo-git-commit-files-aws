@@ -16,7 +16,6 @@ export enum ConfigKeys {
 export enum ParamsKeys {
   GITHUB_TOKEN_PARAM_NAME = "github_access_token",
   BITBUCKET_API_TOKEN_PARAM_NAME = "bitbucket_api_token",
-  BITBUCKET_SSH_PRIVATE_KEY = "bitbucket_ssh_private_key",
   MAX_CONCURRENT_UPLOADS = "max_concurrent_uploads",
 }
 

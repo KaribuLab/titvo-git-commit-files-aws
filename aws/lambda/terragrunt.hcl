@@ -37,13 +37,6 @@ dependency parameters {
   }
 }
 
-dependency ecr {
-  config_path = "${get_parent_terragrunt_dir()}/aws/ecr"
-  mock_outputs = {
-    ecr_repository_url = "000000000000.dkr.ecr.us-east-1.amazonaws.com/tvo-mcp-git-commit-files-ecr-${local.serverless.locals.stage}"
-  }
-}
-
 inputs = {
   function_name = local.function_name
   iam_policy = jsonencode({
@@ -111,14 +104,13 @@ inputs = {
   event_sources_arn = [
     dependency.parameters.outputs.parameters["${local.base_path}/infra/sqs/mcp/git-commit-files/input/queue_arn"]
   ]
-  # Imagen container (en vez de zip) para poder usar git + openssh-client
-  # y clonar repos por SSH (evita rate limit 429 de la API en full scan).
-  package_type           = "Image"
-  image_uri              = "${dependency.ecr.outputs.ecr_repository_url}:latest"
-  image_config_command   = ["entrypoint.handler"]
-  timeout                = 300
-  # /tmp por defecto (512 MB) puede no bastar para clonar repos grandes.
-  ephemeral_storage = 2048
+  runtime       = "nodejs22.x"
+  handler       = "src/entrypoint.handler"
+  timeout       = 300
+  bucket        = local.serverless.locals.service_bucket
+  file_location = "${get_parent_terragrunt_dir()}/build"
+  zip_location  = "${get_parent_terragrunt_dir()}/dist"
+  zip_name      = "${local.function_name}.zip"
   common_tags = merge(local.common_tags, {
     Name = local.function_name
   })

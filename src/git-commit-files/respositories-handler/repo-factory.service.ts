@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { BitbucketClientService } from './bitbucket/bitbucket-client.service'
 import { GitHubClientService } from './github/github-client.service'
-import { SshGitRepoClient } from './ssh/ssh-git-repo-client.service'
 import { RepoClient } from './repo.client'
 
 
@@ -14,8 +13,7 @@ enum RepoHostDomain {
 export class RepoFactoryService {
   constructor(
     private readonly github: GitHubClientService,
-    private readonly bitbucket: BitbucketClientService,
-    private readonly sshGit: SshGitRepoClient
+    private readonly bitbucket: BitbucketClientService
   ) {}
 
   /**
@@ -31,10 +29,8 @@ export class RepoFactoryService {
     }
 
     if (repoUrl.includes(RepoHostDomain.Bitbucket)) {
-      // Usa el cliente SSH (clone) para evitar el rate limit 429 de la API
-      // en full scan / descargas masivas.
-      this.sshGit.initFromRepoUrl(repoUrl)
-      return this.sshGit
+      this.bitbucket.initFromRepoUrl(repoUrl)
+      return this.bitbucket
     }
 
     throw new Error(`Unsupported repo provider: ${repoUrl}`)
