@@ -1,5 +1,5 @@
 terraform {
-  source = "git::https://github.com/KaribuLab/terraform-aws-function.git?ref=v0.10.0"
+  source = "git::https://github.com/KaribuLab/terraform-aws-function.git?ref=v0.11.0"
 }
 
 locals {
@@ -15,6 +15,8 @@ include {
 
 dependency log {
   config_path = "${get_parent_terragrunt_dir()}/aws/cloudwatch"
+  skip_outputs = contains(["init", "validate"], get_terraform_command())
+  mock_outputs_allowed_terraform_commands = ["init", "validate"]
   mock_outputs = {
     log_arn = "arn:aws:logs:us-east-2:123456789012:log-group:/aws/lambda/mock"
   }
@@ -22,6 +24,8 @@ dependency log {
 
 dependency parameters {
   config_path = "${get_parent_terragrunt_dir()}/aws/parameter"
+  skip_outputs = contains(["init", "validate"], get_terraform_command())
+  mock_outputs_allowed_terraform_commands = ["init", "validate"]
   mock_outputs = {
     parameters = {
       "/tvo/security-scan/prod/infra/sqs/mcp/git-commit-files/input/queue_arn" = "arn:aws:sqs:us-east-2:123456789012:tvo-mcp-git-commit-files-input-prod"
@@ -39,6 +43,8 @@ dependency parameters {
 
 dependency ecr {
   config_path = "${get_parent_terragrunt_dir()}/aws/ecr"
+  skip_outputs = contains(["init", "validate"], get_terraform_command())
+  mock_outputs_allowed_terraform_commands = ["init", "validate"]
   mock_outputs = {
     ecr_repository_url = "000000000000.dkr.ecr.us-east-1.amazonaws.com/tvo-mcp-git-commit-files-ecr-${local.serverless.locals.stage}"
   }
@@ -115,10 +121,7 @@ inputs = {
   # y clonar repos por SSH (evita rate limit 429 de la API en full scan).
   package_type           = "Image"
   image_uri              = "${dependency.ecr.outputs.ecr_repository_url}:latest"
-  image_config_command   = ["entrypoint.handler"]
   timeout                = 300
-  # /tmp por defecto (512 MB) puede no bastar para clonar repos grandes.
-  ephemeral_storage = 2048
   common_tags = merge(local.common_tags, {
     Name = local.function_name
   })
