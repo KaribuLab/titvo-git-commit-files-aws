@@ -19,7 +19,7 @@ COPY src ${LAMBDA_TASK_ROOT}/src
 # Compilar el handler con rspack -> build/src/entrypoint.mjs
 RUN npm run build \
   && cp build/src/entrypoint.mjs ${LAMBDA_TASK_ROOT}/entrypoint.mjs \
-  && cp build/src/entrypoint.mjs.map ${LAMBDA_TASK_ROOT}/entrypoint.mjs.map 2>/dev/null || true \
+  && cp build/src/entrypoint.mjs.map ${LAMBDA_TASK_ROOT}/entrypoint.mjs.map \
   && rm -rf ${LAMBDA_TASK_ROOT}/src ${LAMBDA_TASK_ROOT}/build
 
 # Handler: entrypoint.mjs (módulo ES) expone handler

@@ -17,12 +17,12 @@ inputs = {
   lifecycle_policy = jsonencode({
     rules = [{
       rulePriority = 1
-      description  = "Keep only the last 10 images"
+      description  = "Keep only the last 10 untagged images"
       action = {
         type = "expire"
       }
       selection = {
-        tagStatus   = "any"
+        tagStatus   = "untagged"
         countType   = "imageCountMoreThan"
         countNumber = 10
       }
