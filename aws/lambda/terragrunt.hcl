@@ -7,6 +7,7 @@ locals {
   function_name = "${local.serverless.locals.service_name}-lambda-${local.serverless.locals.stage}"
   common_tags   = local.serverless.locals.common_tags
   base_path     = "${local.serverless.locals.parameter_path}/${local.serverless.locals.stage}"
+  image_tag     = contains(["init", "validate"], get_terraform_command()) ? get_env("IMAGE_TAG", "validation-only") : get_env("IMAGE_TAG")
 }
 
 include {
@@ -14,8 +15,8 @@ include {
 }
 
 dependency log {
-  config_path = "${get_parent_terragrunt_dir()}/aws/cloudwatch"
-  skip_outputs = contains(["init", "validate"], get_terraform_command())
+  config_path                             = "${get_parent_terragrunt_dir()}/aws/cloudwatch"
+  skip_outputs                            = contains(["init", "validate"], get_terraform_command())
   mock_outputs_allowed_terraform_commands = ["init", "validate"]
   mock_outputs = {
     log_arn = "arn:aws:logs:us-east-2:123456789012:log-group:/aws/lambda/mock"
@@ -23,8 +24,8 @@ dependency log {
 }
 
 dependency parameters {
-  config_path = "${get_parent_terragrunt_dir()}/aws/parameter"
-  skip_outputs = contains(["init", "validate"], get_terraform_command())
+  config_path                             = "${get_parent_terragrunt_dir()}/aws/parameter"
+  skip_outputs                            = contains(["init", "validate"], get_terraform_command())
   mock_outputs_allowed_terraform_commands = ["init", "validate"]
   mock_outputs = {
     parameters = {
@@ -42,8 +43,8 @@ dependency parameters {
 }
 
 dependency ecr {
-  config_path = "${get_parent_terragrunt_dir()}/aws/ecr"
-  skip_outputs = contains(["init", "validate"], get_terraform_command())
+  config_path                             = "${get_parent_terragrunt_dir()}/aws/ecr"
+  skip_outputs                            = contains(["init", "validate"], get_terraform_command())
   mock_outputs_allowed_terraform_commands = ["init", "validate"]
   mock_outputs = {
     ecr_repository_url = "000000000000.dkr.ecr.us-east-1.amazonaws.com/tvo-mcp-git-commit-files-ecr-${local.serverless.locals.stage}"
@@ -119,9 +120,9 @@ inputs = {
   ]
   # Imagen container (en vez de zip) para poder usar git + openssh-client
   # y clonar repos por SSH (evita rate limit 429 de la API en full scan).
-  package_type           = "Image"
-  image_uri              = "${dependency.ecr.outputs.ecr_repository_url}:latest"
-  timeout                = 300
+  package_type = "Image"
+  image_uri    = "${dependency.ecr.outputs.ecr_repository_url}:${local.image_tag}"
+  timeout      = 300
   common_tags = merge(local.common_tags, {
     Name = local.function_name
   })

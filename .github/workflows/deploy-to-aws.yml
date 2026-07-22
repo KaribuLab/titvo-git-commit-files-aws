@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
 
+env:
+  AWS_REGION: us-east-2
+  AWS_STAGE: prod
+  ECR_REPOSITORY: tvo-mcp-git-commit-files-ecr-prod
+  IMAGE_TAG: ${{ github.sha }}
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -35,6 +41,36 @@ jobs:
           role-to-assume: ${{ secrets.AWS_TITVO_LAMBDA_ROLE_TO_ASSUME }}
           aws-region: us-east-2
 
+      - name: Apply ECR
+        uses: gruntwork-io/terragrunt-action@v2
+        with:
+          tf_version: "1.9.8"
+          tg_version: "0.69.1"
+          tg_dir: "aws/ecr"
+          tg_command: "apply --terragrunt-non-interactive -auto-approve"
+        env:
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_TITVO_ACCOUNT_ID }}
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Lambda image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          set -euo pipefail
+          image_uri="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+          docker build --tag "$image_uri" .
+
+      - name: Push Lambda image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          set -euo pipefail
+          image_uri="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+          docker push "$image_uri"
+
       - name: Apply Terragrunt
         uses: gruntwork-io/terragrunt-action@v2
         with:
@@ -44,5 +80,3 @@ jobs:
           tg_command: "run-all apply --terragrunt-non-interactive -auto-approve"
         env:
           AWS_ACCOUNT_ID: ${{ secrets.AWS_TITVO_ACCOUNT_ID }}
-          AWS_REGION: us-east-2
-          AWS_STAGE: "prod"
