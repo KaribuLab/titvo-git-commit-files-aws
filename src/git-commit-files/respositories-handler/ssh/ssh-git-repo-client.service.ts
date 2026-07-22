@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common'
+import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common'
 import { execFileSync, type ExecFileSyncOptions } from 'child_process'
 import * as fs from 'fs'
 import * as os from 'os'
@@ -40,7 +40,7 @@ export class SshGitRepoClient implements CloneableRepoClient {
 
   constructor(
     private readonly parameterService: ParameterService,
-    gitRunner?: GitRunner,
+    @Optional() gitRunner?: GitRunner,
   ) {
     this.gitRunner = gitRunner ?? this.createDefaultGitRunner()
   }

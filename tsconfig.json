@@ -3,7 +3,7 @@
     "target": "ESNext",
     "module": "ESNext",
     "rootDir": "./",
-    "moduleResolution": "Node",
+    "moduleResolution": "bundler",
     "paths": {
       "@lambda/*": [
         "./src/*"

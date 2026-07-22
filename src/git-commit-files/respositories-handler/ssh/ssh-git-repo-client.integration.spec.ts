@@ -11,7 +11,7 @@
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
-import { SshGitRepoClient } from './ssh-git-repo-client.service'
+import { SshGitRepoClient } from '@lambda/git-commit-files/respositories-handler/ssh/ssh-git-repo-client.service'
 import { ParameterService } from '@lambda/parameter/parameter.service'
 
 const KEY_PATH =

@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common'
-import { BitbucketClientService } from './bitbucket/bitbucket-client.service'
-import { GitHubClientService } from './github/github-client.service'
-import { SshGitRepoClient } from './ssh/ssh-git-repo-client.service'
+import { GitHubClientService } from '@lambda/git-commit-files/respositories-handler/github/github-client.service'
+import { SshGitRepoClient } from '@lambda/git-commit-files/respositories-handler/ssh/ssh-git-repo-client.service'
 import { RepoClient } from './repo.client'
 
 
@@ -14,7 +13,6 @@ enum RepoHostDomain {
 export class RepoFactoryService {
   constructor(
     private readonly github: GitHubClientService,
-    private readonly bitbucket: BitbucketClientService,
     private readonly sshGit: SshGitRepoClient
   ) {}
 
