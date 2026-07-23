@@ -66,9 +66,12 @@ export class GitCommitFilesService {
       // Fetch files
       let files: FileInfo[]
       if (scanMode === FULL_SCAN_MODE) {
-        scanRef = await repoClient.resolveRef(requestedRef as string)
         if ('prepare' in repoClient) {
-          await (repoClient as any).prepare(scanRef)
+          await (repoClient as any).prepare(requestedRef as string)
+        }
+        scanRef = await repoClient.resolveRef(requestedRef as string)
+        if (!scanRef) {
+          throw new Error(`Could not resolve ref ${requestedRef} for ${data.repository}`)
         }
         files = await repoClient.getAllFiles(scanRef)
       } else {

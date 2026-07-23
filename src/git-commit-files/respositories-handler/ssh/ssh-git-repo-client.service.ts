@@ -157,7 +157,7 @@ export class SshGitRepoClient implements CloneableRepoClient {
     this.repoSlug = parts[1] ?? ''
     this.cloneUrl = repoUrl.startsWith('git@')
       ? repoUrl
-      : repoUrl.replace(/\.git$/, '') + '.git'
+      : `git@bitbucket.org:${this.workspace}/${this.repoSlug}.git`
     this.logger.log(
       `SSH client initialized for ${this.workspace}/${this.repoSlug}`,
     )
@@ -222,6 +222,9 @@ export class SshGitRepoClient implements CloneableRepoClient {
   async resolveRef(ref: string): Promise<string> {
     if (/^[0-9a-f]{40}$/i.test(ref)) {
       return ref
+    }
+    if (this.resolvedSha) {
+      return this.resolvedSha
     }
     return this.gitRunner.resolveRemoteRef(this.cloneUrl, ref)
   }
