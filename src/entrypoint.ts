@@ -1,6 +1,5 @@
 import { NestFactory } from '@nestjs/core'
 import {
-  Context,
   Handler,
   SQSEvent,
   SQSRecord
@@ -9,7 +8,6 @@ import { AppModule } from '@lambda/app.module'
 import { INestApplicationContext, Logger as NestLogger } from '@nestjs/common'
 import { Logger } from 'nestjs-pino'
 import { GitCommitFilesService } from '@lambda/git-commit-files/git-commit-files.service'
-import { GitCommitFilesInputDto } from '@lambda/git-commit-files/git-commit-files.dto'
 
 const logger = new NestLogger('git-commit-filesLambdaHandler')
 
@@ -47,7 +45,6 @@ interface GitCommitFilesEvent {
 
 export const handler: Handler<SQSEvent> = async (
   event: SQSEvent,
-  _context: Context
 ): Promise<void> => {
   if (event && event.Records && Array.isArray(event.Records)) {
     try {

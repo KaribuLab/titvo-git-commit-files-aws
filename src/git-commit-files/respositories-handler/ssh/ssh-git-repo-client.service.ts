@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common'
+import { Logger, Optional } from '@nestjs/common'
 import { execFileSync, type ExecFileSyncOptions } from 'child_process'
 import * as fs from 'fs'
 import * as os from 'os'
@@ -6,13 +6,17 @@ import * as path from 'path'
 import {
   CloneableRepoClient,
   FileInfo,
-  RepoClient,
 } from '../repo.client'
 import { ParameterService } from '@lambda/parameter/parameter.service'
 import { ParamsKeys } from '@lambda/config/config.key'
 
-const BITBUCKET_SSH_PRIVATE_KEY_PARAM_NAME =
-  ParamsKeys.BITBUCKET_SSH_PRIVATE_KEY
+export interface SshRepositoryConfig {
+  cloneUrl: string
+  displayName: string
+  privateKeyParameter:
+    | ParamsKeys.GITHUB_SSH_PRIVATE_KEY
+    | ParamsKeys.BITBUCKET_SSH_PRIVATE_KEY
+}
 
 interface GitRunner {
   clone(cloneUrl: string, targetDir: string, ref: string): void
@@ -24,13 +28,12 @@ interface GitRunner {
   resolveRemoteRef(cloneUrl: string, ref: string): string
 }
 
-@Injectable()
 export class SshGitRepoClient implements CloneableRepoClient {
   private readonly logger = new Logger(SshGitRepoClient.name)
 
   private cloneUrl = ''
-  private workspace = ''
-  private repoSlug = ''
+  private displayName = ''
+  private privateKeyParameter: SshRepositoryConfig['privateKeyParameter'] | null = null
   private resolvedSha: string | null = null
 
   private localDir: string | null = null
@@ -143,33 +146,24 @@ export class SshGitRepoClient implements CloneableRepoClient {
     }
   }
 
-  initFromRepoUrl(repoUrl: string): void {
-    const cleaned = repoUrl
-      .replace(/(^git\+|\.git$)/g, '')
-      .replace(/^git@/, 'git@')
-    // git@bitbucket.org:workspace/repo  o  https://bitbucket.org/workspace/repo
-    const withoutScheme = cleaned
-      .replace(/^git@/, '')
-      .replace(/^https?:\/\//, '')
-    const hostStripped = withoutScheme.replace(/^bitbucket\.org[/:]/, '')
-    const parts = hostStripped.split(/[/:]/)
-    this.workspace = parts[0]
-    this.repoSlug = parts[1] ?? ''
-    this.cloneUrl = repoUrl.startsWith('git@')
-      ? repoUrl
-      : `git@bitbucket.org:${this.workspace}/${this.repoSlug}.git`
-    this.logger.log(
-      `SSH client initialized for ${this.workspace}/${this.repoSlug}`,
-    )
+  initialize(config: SshRepositoryConfig): void {
+    this.cloneUrl = config.cloneUrl
+    this.displayName = config.displayName
+    this.privateKeyParameter = config.privateKeyParameter
+    this.logger.log(`SSH client initialized for ${this.displayName}`)
   }
 
   async prepare(ref: string): Promise<void> {
+    if (!this.privateKeyParameter || !this.cloneUrl) {
+      throw new Error('SSH repository client must be initialized before prepare()')
+    }
+
     const key = await this.parameterService.getDecryptedParameterValue(
-      BITBUCKET_SSH_PRIVATE_KEY_PARAM_NAME,
+      this.privateKeyParameter,
     )
     if (!key) {
       throw new Error(
-        `Bitbucket SSH private key not found in Parameter Store (${BITBUCKET_SSH_PRIVATE_KEY_PARAM_NAME}).`,
+        `SSH private key not found in Parameter Store (${this.privateKeyParameter}).`,
       )
     }
 

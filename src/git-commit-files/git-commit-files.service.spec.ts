@@ -1,283 +1,177 @@
-import { Test, TestingModule } from '@nestjs/testing'
-import { ConfigModule, ConfigService } from '@nestjs/config'
-import { GitCommitFilesService } from './git-commit-files.service'
-import { RepoFactoryService } from './respositories-handler/repo-factory.service'
-import { S3Service } from '../aws/s3.service'
-import { RepoClient, FileInfo } from './respositories-handler/repo.client'
-import { S3ParallelETLService } from './buckets/s3-parallel-uploader.service'
-import { AwsModule } from '@lambda/aws/aws.module' // Módulo a mockear
-import configuration from '@lambda/configuration'
-import { ParameterModule } from '@lambda/parameter/parameter.module' // Módulo a mockear
-// Importamos los tokens necesarios para referenciar los providers
-import {
-  EventBridgeService,
-  DynamoDBService,
-  SecretManagerService
-} from '@lambda/aws'
-import { ParameterService } from '@lambda/parameter/parameter.service'
-import { GitCommitFilesInputDto } from './git-commit-files.dto'
+import { ConfigService } from '@nestjs/config'
 import { ConfigKeys } from '@lambda/config/config.key'
-
-// El S3ParallelETLService valida en onModuleInit que exista el bucket de S3.
-process.env[ConfigKeys.S3_BUCKET_NAME] = 'test-bucket'
-
-jest.mock('@octokit/rest', () => ({
-  Octokit: jest.fn().mockImplementation(() => ({
-    rest: {
-      repos: {
-        getCommit: jest.fn(),
-        getContent: jest.fn()
-      }
-    }
-  }))
-}))
-
-// --- MOCK DE S3Service ---
-// NOTA CLAVE: Eliminamos el jest.mock('../aws/s3.service') para evitar
-// que interfiera con el useFactory del AwsModule real.
-// Ahora S3Service se mockea COMPLETAMENTE en MockAwsModule.
-const mockUploadFile = jest.fn()
-
-// Mock de RepoClient
-const repoClientMock: RepoClient & {
-  initFromRepoUrl: jest.Mock<void, [string]>
-  getCommitFiles: jest.Mock<Promise<FileInfo[]>, [string]>
-  resolveRef: jest.Mock<Promise<string>, [string]>
-  getAllFiles: jest.Mock<Promise<FileInfo[]>, [string]>
-  downloadFile: jest.Mock<Promise<Buffer>, [string, string]>
-} = {
-  initFromRepoUrl: jest.fn(),
-  getCommitFiles: jest
-    .fn()
-    .mockResolvedValue([{ path: 'file1.ts', filename: 'file1.ts' }]),
-  resolveRef: jest.fn().mockResolvedValue('branch-head-sha'),
-  getAllFiles: jest
-    .fn()
-    .mockResolvedValue([{ path: 'src/full.ts', filename: 'src/full.ts' }]),
-  downloadFile: jest.fn().mockResolvedValue(Buffer.from('dummy content'))
-}
-
-// Mock de RepoFactoryService para devolver nuestro repoClientMock
-const repoFactoryMock = {
-  getClientForRepoUrl: jest.fn().mockReturnValue(repoClientMock)
-}
-
-// --- MOCK MODULES PARA AWS Y PARAMETER ---
-
-// Mock de servicios AWS adicionales (para tokens no S3)
-const MockAwsService = {
-  sendEvent: jest.fn(),
-  getItem: jest.fn(),
-  getSecret: jest.fn()
-}
-
-// 1. MOCK MODULE para AwsModule
-const MockAwsModule = {
-  module: class MockAwsModule {}, // Proporcionamos los tokens que AwsModule exporta, usando mocks simples
-  providers: [
-    { provide: EventBridgeService, useValue: MockAwsService },
-    { provide: DynamoDBService, useValue: MockAwsService },
-    { provide: SecretManagerService, useValue: MockAwsService }, // Incluimos S3Service aquí con el mock de la función 'uploadFile'
-    { provide: S3Service, useValue: { uploadFile: mockUploadFile } }
-  ], // Es CRUCIAL exportar los mismos tokens que el AwsModule real
-  exports: [
-    S3Service,
-    EventBridgeService,
-    DynamoDBService,
-    SecretManagerService
-  ]
-}
-
-// 2. MOCK MODULE para ParameterModule
-// Asumimos que ParameterModule exporta ParameterService
-const mockParameterService = {
-  get: jest.fn().mockResolvedValue('mock-value')
-}
-
-const MockParameterModule = {
-  module: class MockParameterModule {},
-  providers: [
-    {
-      provide: ParameterService, // Reemplazamos el servicio real
-      useValue: mockParameterService
-    }
-  ],
-  exports: [ParameterService]
-}
-
-// --- FIN MOCK MODULES ---
+import { GitCommitFilesService } from './git-commit-files.service'
+import { CloneableRepoClient, FileInfo } from './respositories-handler/repo.client'
 
 describe('GitCommitFilesService', () => {
+  let repoClient: jest.Mocked<CloneableRepoClient>
+  let repoFactory: { getClientForRepoUrl: jest.Mock }
+  let s3Service: { initETLBatch: jest.Mock }
+  let eventBridgeService: { putEvents: jest.Mock }
   let service: GitCommitFilesService
 
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      imports: [
-        // ConfigModule.forRoot debe ir PRIMERO para que los módulos dependientes
-        // (como AwsModule, ParameterModule) puedan obtener la configuración.
-        ConfigModule.forRoot({
-          isGlobal: true,
-          load: [configuration]
-        }), // Las importaciones dinámicas se ANULAN con overrideModule
-        AwsModule.forRoot(),
-        ParameterModule.forRoot()
-      ],
-      providers: [
-        GitCommitFilesService,
-        S3ParallelETLService,
-        { provide: RepoFactoryService, useValue: repoFactoryMock } // Ya no es necesario mockear S3Service aquí porque se hace en MockAwsModule.
-      ]
+  beforeEach(() => {
+    repoClient = {
+      prepare: jest.fn().mockResolvedValue(undefined),
+      cleanup: jest.fn().mockResolvedValue(undefined),
+      getCommitFiles: jest
+        .fn()
+        .mockResolvedValue([{ path: 'file1.ts', filename: 'file1.ts' }]),
+      resolveRef: jest.fn().mockResolvedValue('branch-head-sha'),
+      getAllFiles: jest
+        .fn()
+        .mockResolvedValue([{ path: 'src/full.ts', filename: 'src/full.ts' }]),
+      downloadFile: jest.fn().mockResolvedValue(Buffer.from('content')),
+    }
+    repoFactory = {
+      getClientForRepoUrl: jest.fn().mockReturnValue(repoClient),
+    }
+    s3Service = {
+      initETLBatch: jest.fn().mockImplementation(
+        async (
+          input: { files: FileInfo[]; storagePrefix: string },
+        ): Promise<string[]> =>
+          input.files.map((file) => `${input.storagePrefix}/${file.path}`),
+      ),
+    }
+    eventBridgeService = { putEvents: jest.fn().mockResolvedValue(undefined) }
+    const configService = {
+      get: jest.fn((key: string) =>
+        key === ConfigKeys.TITVO_EVENT_BUS_NAME ? 'test-event-bus' : undefined,
+      ),
+    } as unknown as ConfigService
+
+    service = new GitCommitFilesService(
+      configService,
+      repoFactory as any,
+      s3Service as any,
+      eventBridgeService as any,
+    )
+  })
+
+  it.each([
+    'https://github.com/owner/repo.git',
+    'https://bitbucket.org/workspace/repo.git',
+  ])('processes commit scans through the selected SSH client for %s', async (repository) => {
+    const result = await service.process({
+      jobId: 'job-1',
+      data: { repository, commitId: 'abc123' },
     })
-      .overrideModule(AwsModule) // ANULAR AWS MODULE
-      .useModule(MockAwsModule)
-      .overrideModule(ParameterModule) // ANULAR PARAMETER MODULE
-      .useModule(MockParameterModule)
-      // Garantizamos que el S3Service inyectado sea el mock en cualquier scope
-      .overrideProvider(S3Service)
-      .useValue({ uploadFile: mockUploadFile })
-      .compile()
 
-    // Ejecuta los hooks OnModuleInit (configura pLimit y bucket en S3ParallelETLService)
-    await module.init()
-
-    service = module.get<GitCommitFilesService>(GitCommitFilesService) // Reset de mocks
-
-    mockUploadFile.mockReset()
-    repoClientMock.initFromRepoUrl.mockReset()
-    repoClientMock.getCommitFiles.mockClear()
-    repoClientMock.getCommitFiles.mockResolvedValue([
-      { path: 'file1.ts', filename: 'file1.ts' }
-    ])
-    repoClientMock.resolveRef.mockClear()
-    repoClientMock.resolveRef.mockResolvedValue('branch-head-sha')
-    repoClientMock.getAllFiles.mockClear()
-    repoClientMock.getAllFiles.mockResolvedValue([
-      { path: 'src/full.ts', filename: 'src/full.ts' }
-    ])
-    repoClientMock.downloadFile.mockClear()
-    repoClientMock.downloadFile.mockResolvedValue(Buffer.from('dummy content'))
-    repoFactoryMock.getClientForRepoUrl.mockClear()
-  })
-
-  it('should be defined', () => {
-    expect(service).toBeDefined()
-  })
-
-  it('should process commit and upload files to S3', async () => {
-    mockUploadFile.mockResolvedValue(undefined) // Simula S3
-
-    const input: GitCommitFilesInputDto = {
-      data: {
-        commitId: 'abc123',
-        repository: 'https://bitbucket.org/workspace/repo.git'
+    expect(repoFactory.getClientForRepoUrl).toHaveBeenCalledWith(repository)
+    expect(repoClient.prepare).toHaveBeenCalledWith('abc123')
+    expect(repoClient.getCommitFiles).toHaveBeenCalledWith('abc123')
+    expect(s3Service.initETLBatch).toHaveBeenCalledWith(
+      {
+        files: [{ path: 'file1.ts', filename: 'file1.ts' }],
+        ref: 'abc123',
+        storagePrefix: 'abc123',
       },
-      jobId: '1'
-    }
-
-    const result = await service.process(input) // Verifica que el RepoClient se haya usado
-
-    expect(repoFactoryMock.getClientForRepoUrl).toHaveBeenCalledWith(
-      input.data.repository
+      repoClient,
     )
-    expect(repoClientMock.getCommitFiles).toHaveBeenCalledWith(
-      input.data.commitId
-    )
-    expect(repoClientMock.downloadFile).toHaveBeenCalledWith(
-      'file1.ts',
-      input.data.commitId
-    )
-
-    // S3 recibe (bucket, key, buffer)
-    expect(mockUploadFile).toHaveBeenCalledWith(
-      expect.any(String),
-      `${input.data.commitId}/file1.ts`,
-      expect.any(Buffer)
-    )
-
-    // Validación del resultado final
-    expect(result.success).toBe(true)
-    expect(result.data.filesPaths).toEqual([`${input.data.commitId}/file1.ts`])
-    expect(result.data.scanMode).toBe('commit')
-    expect(result.data.storagePrefix).toBe(input.data.commitId)
+    expect(repoClient.cleanup).toHaveBeenCalledTimes(1)
+    expect(result).toMatchObject({
+      success: true,
+      data: {
+        filesPaths: ['abc123/file1.ts'],
+        scanMode: 'commit',
+        storagePrefix: 'abc123',
+      },
+    })
   })
 
-  it('should process full scan and upload files with full storage prefix', async () => {
-    mockUploadFile.mockResolvedValue(undefined)
-
-    const input: GitCommitFilesInputDto = {
+  it('processes a full scan with the existing storage and result contract', async () => {
+    const result = await service.process({
+      jobId: 'job-1',
       data: {
+        repository: 'https://github.com/owner/repo.git',
         commitId: 'abc123',
-        repository: 'https://bitbucket.org/workspace/repo.git',
         scanMode: 'full',
-        branch: 'main'
+        branch: 'feature/ssh-only',
       },
-      jobId: '1'
-    }
+    })
 
-    const result = await service.process(input)
-
-    expect(repoClientMock.resolveRef).toHaveBeenCalledWith('main')
-    expect(repoClientMock.getAllFiles).toHaveBeenCalledWith('branch-head-sha')
-    expect(repoClientMock.getCommitFiles).not.toHaveBeenCalled()
-    expect(repoClientMock.downloadFile).toHaveBeenCalledWith('src/full.ts', 'branch-head-sha')
-    expect(mockUploadFile).toHaveBeenCalledWith(
-      expect.any(String),
-      'full/1/src/full.ts',
-      expect.any(Buffer)
+    expect(repoClient.prepare).toHaveBeenCalledWith('feature/ssh-only')
+    expect(repoClient.resolveRef).toHaveBeenCalledWith('feature/ssh-only')
+    expect(repoClient.getAllFiles).toHaveBeenCalledWith('branch-head-sha')
+    expect(s3Service.initETLBatch).toHaveBeenCalledWith(
+      {
+        files: [{ path: 'src/full.ts', filename: 'src/full.ts' }],
+        ref: 'branch-head-sha',
+        storagePrefix: 'full/job-1',
+      },
+      repoClient,
     )
-    expect(result.success).toBe(true)
     expect(result.data).toEqual({
-      filesPaths: ['full/1/src/full.ts'],
+      filesPaths: ['full/job-1/src/full.ts'],
       commitId: 'abc123',
       scanMode: 'full',
       scanRef: 'branch-head-sha',
-      storagePrefix: 'full/1'
+      storagePrefix: 'full/job-1',
     })
   })
 
-  it('should resolve slash branch names before full scan listing', async () => {
-    mockUploadFile.mockResolvedValue(undefined)
-    repoClientMock.resolveRef.mockResolvedValueOnce('slash-branch-head')
+  it.each([
+    'SSH private key not found',
+    'git clone failed',
+  ])('reports preparation failure and still cleans up: %s', async (message) => {
+    repoClient.prepare.mockRejectedValueOnce(new Error(message))
 
-    const input: GitCommitFilesInputDto = {
+    const result = await service.process({
+      jobId: 'job-1',
       data: {
+        repository: 'https://github.com/owner/repo.git',
         commitId: 'abc123',
-        repository: 'https://bitbucket.org/workspace/repo.git',
-        scanMode: 'full',
-        branch: 'feature/titvo-integration'
       },
-      jobId: '1'
-    }
-
-    const result = await service.process(input)
-
-    expect(repoClientMock.resolveRef).toHaveBeenCalledWith(
-      'feature/titvo-integration'
-    )
-    expect(repoClientMock.getAllFiles).toHaveBeenCalledWith('slash-branch-head')
-    expect(repoClientMock.downloadFile).toHaveBeenCalledWith(
-      'src/full.ts',
-      'slash-branch-head'
-    )
-    expect(result.data.scanRef).toBe('slash-branch-head')
-  })
-
-  it('should return success=false when file processing throws', async () => {
-    repoClientMock.getCommitFiles.mockRejectedValueOnce(
-      new Error('boom')
-    )
-
-    const input: GitCommitFilesInputDto = {
-      data: {
-        commitId: 'abc123',
-        repository: 'https://bitbucket.org/workspace/repo.git'
-      },
-      jobId: '1'
-    }
-
-    const result = await service.process(input)
+    })
 
     expect(result.success).toBe(false)
     expect(result.data.filesPaths).toEqual([])
+    expect(s3Service.initETLBatch).not.toHaveBeenCalled()
+    expect(repoClient.cleanup).toHaveBeenCalledTimes(1)
+  })
+
+  it('requires a branch or ref for full scans before creating a client', async () => {
+    const result = await service.process({
+      jobId: 'job-1',
+      data: {
+        repository: 'https://github.com/owner/repo.git',
+        commitId: 'abc123',
+        scanMode: 'full',
+      },
+    })
+
+    expect(result.success).toBe(false)
+    expect(repoFactory.getClientForRepoUrl).not.toHaveBeenCalled()
+  })
+
+  it('publishes the unchanged result event structure', async () => {
+    await service.process({
+      jobId: 'job-1',
+      data: {
+        repository: 'https://bitbucket.org/workspace/repo.git',
+        commitId: 'abc123',
+      },
+    })
+
+    expect(eventBridgeService.putEvents).toHaveBeenCalledWith([
+      expect.objectContaining({
+        Source: 'mcp.tool.git.commit-files',
+        DetailType: 'output',
+        EventBusName: 'test-event-bus',
+        Detail: JSON.stringify({
+          job_id: 'job-1',
+          success: true,
+          message: 'commit scan files processed successfully.',
+          data: {
+            commit_id: 'abc123',
+            files_paths: ['abc123/file1.ts'],
+            scan_mode: 'commit',
+            scan_ref: 'abc123',
+            storage_prefix: 'abc123',
+          },
+        }),
+      }),
+    ])
   })
 })

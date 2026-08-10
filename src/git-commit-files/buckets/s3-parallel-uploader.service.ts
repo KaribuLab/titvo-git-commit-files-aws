@@ -4,7 +4,6 @@ import pLimit from 'p-limit'
 import { S3Service } from '../../aws/s3.service'
 import { FileInfo, RepoClient } from '../respositories-handler/repo.client'
 import { ConfigKeys, ParamsKeys } from '@lambda/config/config.key'
-import { ParameterService } from '@lambda/parameter/parameter.service'
 
 export interface FileUploadTask {
   s3Key: string
