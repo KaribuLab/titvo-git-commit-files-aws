@@ -6,6 +6,7 @@ import * as path from 'path'
 import {
   CloneableRepoClient,
   FileInfo,
+  PrepareOptions,
 } from '../repo.client'
 import { ParameterService } from '@lambda/parameter/parameter.service'
 import { ParamsKeys } from '@lambda/config/config.key'
@@ -18,11 +19,22 @@ export interface SshRepositoryConfig {
     | ParamsKeys.BITBUCKET_SSH_PRIVATE_KEY
 }
 
+/** Profundidad por defecto del clone shallow (solo el commit objetivo). */
+export const DEFAULT_CLONE_DEPTH = 1
+
+const FULL_SHA_PATTERN = /^[0-9a-f]{40}$/i
+
 interface GitRunner {
-  clone(cloneUrl: string, targetDir: string, ref: string): void
-  fetchCommit(cloneDir: string, cloneUrl: string, sha: string): void
+  clone(cloneUrl: string, targetDir: string, ref: string, depth: number): void
+  fetchCommit(cloneDir: string, cloneUrl: string, sha: string, depth: number): void
   checkout(cloneDir: string, sha: string): void
   revParseHead(cloneDir: string): string
+  /** true si `<sha>^` existe en el clon (false en commit raíz). */
+  hasParent(cloneDir: string, sha: string): boolean
+  /** Archivos A/C/M/R entre el primer padre y `<sha>`. */
+  diffTreeFiles(cloneDir: string, sha: string): string[]
+  /** Árbol completo rastreado en `<sha>`. */
+  lsTreeFiles(cloneDir: string, sha: string): string[]
   lsFiles(cloneDir: string): string[]
   readFile(cloneDir: string, filePath: string): Buffer
   resolveRemoteRef(cloneUrl: string, ref: string): string
@@ -80,20 +92,24 @@ export class SshGitRepoClient implements CloneableRepoClient {
         ...opts,
       }) as string
 
+    // Salida separada por NUL (-z) para soportar rutas con espacios o saltos
+    // de línea.
+    const splitNul = (out: string) => out.split('\0').filter(Boolean)
+
     return {
-      clone: (cloneUrl, targetDir, ref) => {
+      clone: (cloneUrl, targetDir, ref, depth) => {
         // Rama/tag: clonar directo esa ref con --single-branch (funciona en
         // clones shallow y crea la branch local). SHA: clonar HEAD y dejar el
         // fetch del SHA para prepare() (fetchCommit + checkout).
         // El '--' aísla cloneUrl para que un repo con nombre tipo '--algo'
         // no se interprete como flag de git (argument injection).
-        if (ref && !/^[0-9a-f]{40}$/i.test(ref)) {
+        if (ref && !FULL_SHA_PATTERN.test(ref)) {
           execFileSync(
             'git',
             [
               'clone',
               '--depth',
-              '1',
+              String(depth),
               '--branch',
               ref,
               '--single-branch',
@@ -106,13 +122,13 @@ export class SshGitRepoClient implements CloneableRepoClient {
         } else {
           execFileSync(
             'git',
-            ['clone', '--depth', '1', '--', cloneUrl, targetDir],
+            ['clone', '--depth', String(depth), '--', cloneUrl, targetDir],
             { env: buildEnv() },
           )
         }
       },
-      fetchCommit: (cloneDir, cloneUrl, sha) => {
-        run(['fetch', '--depth', '1', '--', cloneUrl, sha], {
+      fetchCommit: (cloneDir, cloneUrl, sha, depth) => {
+        run(['fetch', '--depth', String(depth), '--', cloneUrl, sha], {
           cwd: cloneDir,
           env: buildEnv(),
         })
@@ -125,6 +141,41 @@ export class SshGitRepoClient implements CloneableRepoClient {
           cwd: cloneDir,
           encoding: 'utf8',
         }).trim(),
+      // Los SHA llegan validados (40 hex) desde el cliente, así que no pueden
+      // interpretarse como flags de git.
+      hasParent: (cloneDir, sha) => {
+        try {
+          run(['rev-parse', '--verify', '--quiet', `${sha}^`], {
+            cwd: cloneDir,
+            stdio: ['ignore', 'pipe', 'ignore'],
+          })
+          return true
+        } catch {
+          return false
+        }
+      },
+      diffTreeFiles: (cloneDir, sha) =>
+        splitNul(
+          run(
+            [
+              'diff-tree',
+              '-r',
+              '-z',
+              '--name-only',
+              '--diff-filter=ACMR',
+              `${sha}^`,
+              sha,
+            ],
+            { cwd: cloneDir, encoding: 'utf8' },
+          ),
+        ),
+      lsTreeFiles: (cloneDir, sha) =>
+        splitNul(
+          run(['ls-tree', '-r', '-z', '--name-only', sha], {
+            cwd: cloneDir,
+            encoding: 'utf8',
+          }),
+        ),
       lsFiles: (cloneDir) =>
         run(['ls-files'], { cwd: cloneDir, encoding: 'utf8' })
           .split('\n')
@@ -153,10 +204,11 @@ export class SshGitRepoClient implements CloneableRepoClient {
     this.logger.log(`SSH client initialized for ${this.displayName}`)
   }
 
-  async prepare(ref: string): Promise<void> {
+  async prepare(ref: string, options: PrepareOptions = {}): Promise<void> {
     if (!this.privateKeyParameter || !this.cloneUrl) {
       throw new Error('SSH repository client must be initialized before prepare()')
     }
+    const depth = options.depth ?? DEFAULT_CLONE_DEPTH
 
     const key = await this.parameterService.getDecryptedParameterValue(
       this.privateKeyParameter,
@@ -175,11 +227,13 @@ export class SshGitRepoClient implements CloneableRepoClient {
 
     this.localDir = fs.mkdtempSync(path.join(os.tmpdir(), 'git-clone-'))
 
-    this.logger.log(`Cloning ${this.cloneUrl} @ ${ref} into ${this.localDir}`)
-    this.gitRunner.clone(this.cloneUrl, this.localDir, ref)
+    this.logger.log(
+      `Cloning ${this.cloneUrl} @ ${ref} (depth ${depth}) into ${this.localDir}`,
+    )
+    this.gitRunner.clone(this.cloneUrl, this.localDir, ref, depth)
 
-    if (ref && /^[0-9a-f]{40}$/i.test(ref)) {
-      this.gitRunner.fetchCommit(this.localDir, this.cloneUrl, ref)
+    if (ref && FULL_SHA_PATTERN.test(ref)) {
+      this.gitRunner.fetchCommit(this.localDir, this.cloneUrl, ref, depth)
       this.gitRunner.checkout(this.localDir, ref)
     }
 
@@ -209,8 +263,34 @@ export class SshGitRepoClient implements CloneableRepoClient {
     }
   }
 
-  async getCommitFiles(_commitId: string): Promise<FileInfo[]> {
-    return this.getAllFiles(this.resolvedSha ?? _commitId)
+  /**
+   * Archivos añadidos/copiados/modificados/renombrados por el commit respecto
+   * a su primer padre. Nunca lista el árbol completo salvo en un commit raíz.
+   * Requiere que prepare() haya clonado con profundidad >= 2 para que el
+   * padre exista en el clon shallow.
+   */
+  async getCommitFiles(commitId: string): Promise<FileInfo[]> {
+    if (!this.localDir) {
+      throw new Error('prepare() must be called before getCommitFiles()')
+    }
+    const sha = this.resolvedSha ?? commitId
+    if (!FULL_SHA_PATTERN.test(sha)) {
+      throw new Error(
+        `getCommitFiles() requires a resolved 40-hex commit SHA, got: ${sha}`,
+      )
+    }
+
+    if (!this.gitRunner.hasParent(this.localDir, sha)) {
+      const tree = this.gitRunner.lsTreeFiles(this.localDir, sha)
+      this.logger.log(
+        `commit ${sha} has no parent in clone; selecting full tree (${tree.length} files)`,
+      )
+      return tree.map((p) => ({ path: p, filename: p }))
+    }
+
+    const changed = this.gitRunner.diffTreeFiles(this.localDir, sha)
+    this.logger.log(`commit ${sha} touches ${changed.length} files`)
+    return changed.map((p) => ({ path: p, filename: p }))
   }
 
   async resolveRef(ref: string): Promise<string> {

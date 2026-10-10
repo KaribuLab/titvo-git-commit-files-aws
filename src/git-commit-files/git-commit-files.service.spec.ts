@@ -59,7 +59,7 @@ describe('GitCommitFilesService', () => {
     })
 
     expect(repoFactory.getClientForRepoUrl).toHaveBeenCalledWith(repository)
-    expect(repoClient.prepare).toHaveBeenCalledWith('abc123')
+    expect(repoClient.prepare).toHaveBeenCalledWith('abc123', { depth: 2 })
     expect(repoClient.getCommitFiles).toHaveBeenCalledWith('abc123')
     expect(s3Service.initETLBatch).toHaveBeenCalledWith(
       {
@@ -91,7 +91,9 @@ describe('GitCommitFilesService', () => {
       },
     })
 
-    expect(repoClient.prepare).toHaveBeenCalledWith('feature/ssh-only')
+    expect(repoClient.prepare).toHaveBeenCalledWith('feature/ssh-only', {
+      depth: 1,
+    })
     expect(repoClient.resolveRef).toHaveBeenCalledWith('feature/ssh-only')
     expect(repoClient.getAllFiles).toHaveBeenCalledWith('branch-head-sha')
     expect(s3Service.initETLBatch).toHaveBeenCalledWith(

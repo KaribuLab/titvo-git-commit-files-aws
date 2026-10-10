@@ -13,6 +13,10 @@ import { ConfigKeys } from '@lambda/config/config.key'
 
 const DEFAULT_SCAN_MODE = 'commit'
 const FULL_SCAN_MODE = 'full'
+// commit: el padre debe estar en el clon shallow para calcular el diff.
+// full: solo hace falta el snapshot del ref.
+const COMMIT_SCAN_CLONE_DEPTH = 2
+const FULL_SCAN_CLONE_DEPTH = 1
 
 /**
  * Main service that handles the complete commit processing flow.
@@ -67,7 +71,9 @@ export class GitCommitFilesService {
       let files: FileInfo[]
       if (scanMode === FULL_SCAN_MODE) {
         if ('prepare' in repoClient) {
-          await (repoClient as any).prepare(requestedRef as string)
+          await (repoClient as any).prepare(requestedRef as string, {
+            depth: FULL_SCAN_CLONE_DEPTH,
+          })
         }
         scanRef = await repoClient.resolveRef(requestedRef as string)
         if (!scanRef) {
@@ -76,11 +82,16 @@ export class GitCommitFilesService {
         files = await repoClient.getAllFiles(scanRef)
       } else {
         if ('prepare' in repoClient) {
-          await (repoClient as any).prepare(data.commitId)
+          await (repoClient as any).prepare(data.commitId, {
+            depth: COMMIT_SCAN_CLONE_DEPTH,
+          })
         }
         files = await repoClient.getCommitFiles(data.commitId)
       }
-      this.logger.log(`Found ${files.length} files.`, jobCorrelationId)
+      this.logger.log(
+        `Found ${files.length} files (mode=${scanMode}, ref=${scanRef}).`,
+        jobCorrelationId
+      )
 
       // Upload files to S3
       filesPaths = await this.s3Service.initETLBatch(
