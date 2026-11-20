@@ -6,7 +6,7 @@
 # Uso:
 #   docker build -t ssh-harness -f Dockerfile.harness .
 #   docker run --rm \
-#     -e REPO_URL="git@bitbucket.org:WORKSPACE/REPO.git" \
+#     -e REPO_URL="git@ssh.bitbucket.org:WORKSPACE/REPO.git" \
 #     -e CLONE_REF="main" \
 #     -e COMMIT_SHA="" \
 #     -v /ruta/a/tu/deploy_key:/tmp/ssh_key:ro \

@@ -25,12 +25,17 @@ describe('RepoFactoryService', () => {
     ],
     [
       'https://bitbucket.org/workspace/repository',
-      'git@bitbucket.org:workspace/repository.git',
+      'git@ssh.bitbucket.org:workspace/repository.git',
       ParamsKeys.BITBUCKET_SSH_PRIVATE_KEY,
     ],
     [
       'git@bitbucket.org:workspace/repository.git',
-      'git@bitbucket.org:workspace/repository.git',
+      'git@ssh.bitbucket.org:workspace/repository.git',
+      ParamsKeys.BITBUCKET_SSH_PRIVATE_KEY,
+    ],
+    [
+      'git@ssh.bitbucket.org:workspace/repository.git',
+      'git@ssh.bitbucket.org:workspace/repository.git',
       ParamsKeys.BITBUCKET_SSH_PRIVATE_KEY,
     ],
   ])('normalizes %s', (repoUrl, cloneUrl, privateKeyParameter) => {
@@ -43,6 +48,8 @@ describe('RepoFactoryService', () => {
 
   it.each([
     'https://github.com.evil.test/example/repository.git',
+    'git@ssh.bitbucket.org.example.com:workspace/repository.git',
+    'https://bitbucket.org.example.com/workspace/repository.git',
     'git@gitlab.com:example/repository.git',
     'https://github.com/example',
     'https://github.com/example/repository/extra',

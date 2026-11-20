@@ -11,10 +11,17 @@ const REPOSITORY_PART_PATTERN = /^[A-Za-z0-9._-]+$/
 
 export const REPO_HOST_CONFIG = {
   'github.com': {
+    sshHost: 'github.com',
     sshUser: 'git',
     privateKeyParameter: ParamsKeys.GITHUB_SSH_PRIVATE_KEY,
   },
   'bitbucket.org': {
+    sshHost: 'ssh.bitbucket.org',
+    sshUser: 'git',
+    privateKeyParameter: ParamsKeys.BITBUCKET_SSH_PRIVATE_KEY,
+  },
+  'ssh.bitbucket.org': {
+    sshHost: 'ssh.bitbucket.org',
     sshUser: 'git',
     privateKeyParameter: ParamsKeys.BITBUCKET_SSH_PRIVATE_KEY,
   },
@@ -22,6 +29,7 @@ export const REPO_HOST_CONFIG = {
 
 type SupportedRepoHost = keyof typeof REPO_HOST_CONFIG
 
+/** Validate repository coordinates and map web/legacy hosts to the SSH endpoint. */
 export function parseSshRepositoryConfig(repoUrl: string): SshRepositoryConfig {
   const cleaned = repoUrl.trim().replace(/^git\+/, '').replace(/\.git$/, '')
   let host: string
@@ -60,7 +68,7 @@ export function parseSshRepositoryConfig(repoUrl: string): SshRepositoryConfig {
 
   const [namespace, repository] = parts
   return {
-    cloneUrl: `${hostConfig.sshUser}@${host}:${namespace}/${repository}.git`,
+    cloneUrl: `${hostConfig.sshUser}@${hostConfig.sshHost}:${namespace}/${repository}.git`,
     displayName: `${namespace}/${repository}`,
     privateKeyParameter: hostConfig.privateKeyParameter,
   }

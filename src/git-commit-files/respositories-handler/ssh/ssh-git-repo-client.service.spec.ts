@@ -76,7 +76,7 @@ function createMockGitRunner(
 }
 
 const BITBUCKET_CONFIG: SshRepositoryConfig = {
-  cloneUrl: 'git@bitbucket.org:workspace/repo.git',
+  cloneUrl: 'git@ssh.bitbucket.org:workspace/repo.git',
   displayName: 'workspace/repo',
   privateKeyParameter: ParamsKeys.BITBUCKET_SSH_PRIVATE_KEY,
 }
