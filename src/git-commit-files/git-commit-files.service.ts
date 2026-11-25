@@ -93,11 +93,29 @@ export class GitCommitFilesService {
         jobCorrelationId
       )
 
+      // The root policy is independent of the changed-file selection.
+      const policyPath = '.titvoignore.yml'
+      if (!files.some((file) => file.path === policyPath)) {
+        try {
+          await repoClient.downloadFile(policyPath, scanRef as string)
+          files = [...files, { path: policyPath, filename: policyPath }]
+        } catch (error) {
+          // Only an absent policy preserves legacy ingestion. Other read errors
+          // must not silently turn a configured scan into an unconfigured one.
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+        }
+      }
+
       // Upload files to S3
       filesPaths = await this.s3Service.initETLBatch(
         { files, ref: scanRef as string, storagePrefix },
         repoClient
       )
+
+      if (files.some((file) => file.path === policyPath) &&
+          !filesPaths.includes(`${storagePrefix}/${policyPath}`)) {
+        throw new Error('Root policy upload failed')
+      }
 
       success = true
       message = `${scanMode} scan files processed successfully.`

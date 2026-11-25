@@ -21,7 +21,7 @@ describe('GitCommitFilesService', () => {
       getAllFiles: jest
         .fn()
         .mockResolvedValue([{ path: 'src/full.ts', filename: 'src/full.ts' }]),
-      downloadFile: jest.fn().mockResolvedValue(Buffer.from('content')),
+      downloadFile: jest.fn().mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' })),
     }
     repoFactory = {
       getClientForRepoUrl: jest.fn().mockReturnValue(repoClient),
@@ -111,6 +111,78 @@ describe('GitCommitFilesService', () => {
       scanRef: 'branch-head-sha',
       storagePrefix: 'full/job-1',
     })
+  })
+
+  it.each(['commit', 'full'])('transports unchanged root policy at the scan revision (%s)', async (scanMode) => {
+    repoClient.downloadFile.mockResolvedValue(Buffer.from('version: 1\nexceptions: []\n'))
+    const result = await service.process({ jobId: 'job-1', data: {
+      repository: 'https://github.com/owner/repo.git', commitId: 'abc123',
+      scanMode, branch: 'main',
+    } } as any)
+    expect(result.success).toBe(true)
+    expect(repoClient.downloadFile).toHaveBeenCalledWith('.titvoignore.yml', scanMode === 'full' ? 'branch-head-sha' : 'abc123')
+    expect(s3Service.initETLBatch.mock.calls[0][0].files.filter((f: FileInfo) => f.path === '.titvoignore.yml')).toEqual([{ path: '.titvoignore.yml', filename: '.titvoignore.yml' }])
+  })
+
+  it('does not duplicate a selected policy', async () => {
+    repoClient.getCommitFiles.mockResolvedValue([{ path: '.titvoignore.yml', filename: '.titvoignore.yml' }])
+    repoClient.downloadFile.mockResolvedValue(Buffer.from('version: 1'))
+    const result = await service.process({ jobId: 'job-1', data: { repository: 'https://github.com/owner/repo.git', commitId: 'abc123' } })
+    expect(result.data.filesPaths).toEqual(['abc123/.titvoignore.yml'])
+  })
+
+  it('fails rather than silently dropping policy during ETL', async () => {
+    repoClient.downloadFile.mockResolvedValue(Buffer.from('version: 1'))
+    s3Service.initETLBatch.mockResolvedValue(['abc123/file1.ts'])
+    const result = await service.process({ jobId: 'job-1', data: { repository: 'https://github.com/owner/repo.git', commitId: 'abc123' } })
+    expect(result.success).toBe(false)
+    expect(result.data.filesPaths).toEqual([])
+    expect(result.message).toContain('Root policy upload failed')
+  })
+
+  it.each([
+    { scanMode: 'commit', code: 'EACCES' },
+    { scanMode: 'commit', code: 'EIO' },
+    { scanMode: 'full', code: 'EACCES' },
+    { scanMode: 'full', code: 'EIO' },
+  ])('fails closed on root policy $code in $scanMode scans', async ({ scanMode, code }) => {
+    repoClient.downloadFile.mockRejectedValueOnce(
+      Object.assign(new Error(code), { code }),
+    )
+    const result = await service.process({
+      jobId: 'job-1',
+      data: {
+        repository: 'https://github.com/owner/repo.git',
+        commitId: 'abc123',
+        scanMode,
+        branch: 'main',
+      },
+    } as any)
+    const scanRef = scanMode === 'full' ? 'branch-head-sha' : 'abc123'
+    const storagePrefix = scanMode === 'full' ? 'full/job-1' : 'abc123'
+    const message = `Error processing commit: ${code}`
+
+    expect(result).toEqual({
+      jobId: 'job-1',
+      success: false,
+      message,
+      data: { filesPaths: [], commitId: 'abc123', scanMode, scanRef, storagePrefix },
+    })
+    expect(repoClient.downloadFile).toHaveBeenCalledTimes(1)
+    expect(repoClient.downloadFile).toHaveBeenCalledWith('.titvoignore.yml', scanRef)
+    expect(s3Service.initETLBatch).not.toHaveBeenCalled()
+    expect(repoClient.cleanup).toHaveBeenCalledTimes(1)
+    expect(eventBridgeService.putEvents).toHaveBeenCalledTimes(1)
+    expect(eventBridgeService.putEvents).toHaveBeenCalledWith([{
+      Source: 'mcp.tool.git.commit-files',
+      DetailType: 'output',
+      EventBusName: 'test-event-bus',
+      Detail: JSON.stringify({
+        job_id: 'job-1', success: false, message,
+        data: { commit_id: 'abc123', files_paths: [], scan_mode: scanMode,
+          scan_ref: scanRef, storage_prefix: storagePrefix },
+      }),
+    }])
   })
 
   it.each([
