@@ -141,6 +141,51 @@ describe('GitCommitFilesService', () => {
   })
 
   it.each([
+    { scanMode: 'commit', code: 'EACCES' },
+    { scanMode: 'commit', code: 'EIO' },
+    { scanMode: 'full', code: 'EACCES' },
+    { scanMode: 'full', code: 'EIO' },
+  ])('fails closed on root policy $code in $scanMode scans', async ({ scanMode, code }) => {
+    repoClient.downloadFile.mockRejectedValueOnce(
+      Object.assign(new Error(code), { code }),
+    )
+    const result = await service.process({
+      jobId: 'job-1',
+      data: {
+        repository: 'https://github.com/owner/repo.git',
+        commitId: 'abc123',
+        scanMode,
+        branch: 'main',
+      },
+    } as any)
+    const scanRef = scanMode === 'full' ? 'branch-head-sha' : 'abc123'
+    const storagePrefix = scanMode === 'full' ? 'full/job-1' : 'abc123'
+    const message = `Error processing commit: ${code}`
+
+    expect(result).toEqual({
+      jobId: 'job-1',
+      success: false,
+      message,
+      data: { filesPaths: [], commitId: 'abc123', scanMode, scanRef, storagePrefix },
+    })
+    expect(repoClient.downloadFile).toHaveBeenCalledTimes(1)
+    expect(repoClient.downloadFile).toHaveBeenCalledWith('.titvoignore.yml', scanRef)
+    expect(s3Service.initETLBatch).not.toHaveBeenCalled()
+    expect(repoClient.cleanup).toHaveBeenCalledTimes(1)
+    expect(eventBridgeService.putEvents).toHaveBeenCalledTimes(1)
+    expect(eventBridgeService.putEvents).toHaveBeenCalledWith([{
+      Source: 'mcp.tool.git.commit-files',
+      DetailType: 'output',
+      EventBusName: 'test-event-bus',
+      Detail: JSON.stringify({
+        job_id: 'job-1', success: false, message,
+        data: { commit_id: 'abc123', files_paths: [], scan_mode: scanMode,
+          scan_ref: scanRef, storage_prefix: storagePrefix },
+      }),
+    }])
+  })
+
+  it.each([
     'SSH private key not found',
     'git clone failed',
   ])('reports preparation failure and still cleans up: %s', async (message) => {
