@@ -21,7 +21,7 @@ describe('GitCommitFilesService', () => {
       getAllFiles: jest
         .fn()
         .mockResolvedValue([{ path: 'src/full.ts', filename: 'src/full.ts' }]),
-      downloadFile: jest.fn().mockResolvedValue(Buffer.from('content')),
+      downloadFile: jest.fn().mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' })),
     }
     repoFactory = {
       getClientForRepoUrl: jest.fn().mockReturnValue(repoClient),
@@ -111,6 +111,33 @@ describe('GitCommitFilesService', () => {
       scanRef: 'branch-head-sha',
       storagePrefix: 'full/job-1',
     })
+  })
+
+  it.each(['commit', 'full'])('transports unchanged root policy at the scan revision (%s)', async (scanMode) => {
+    repoClient.downloadFile.mockResolvedValue(Buffer.from('version: 1\nexceptions: []\n'))
+    const result = await service.process({ jobId: 'job-1', data: {
+      repository: 'https://github.com/owner/repo.git', commitId: 'abc123',
+      scanMode, branch: 'main',
+    } } as any)
+    expect(result.success).toBe(true)
+    expect(repoClient.downloadFile).toHaveBeenCalledWith('.titvoignore.yml', scanMode === 'full' ? 'branch-head-sha' : 'abc123')
+    expect(s3Service.initETLBatch.mock.calls[0][0].files.filter((f: FileInfo) => f.path === '.titvoignore.yml')).toEqual([{ path: '.titvoignore.yml', filename: '.titvoignore.yml' }])
+  })
+
+  it('does not duplicate a selected policy', async () => {
+    repoClient.getCommitFiles.mockResolvedValue([{ path: '.titvoignore.yml', filename: '.titvoignore.yml' }])
+    repoClient.downloadFile.mockResolvedValue(Buffer.from('version: 1'))
+    const result = await service.process({ jobId: 'job-1', data: { repository: 'https://github.com/owner/repo.git', commitId: 'abc123' } })
+    expect(result.data.filesPaths).toEqual(['abc123/.titvoignore.yml'])
+  })
+
+  it('fails rather than silently dropping policy during ETL', async () => {
+    repoClient.downloadFile.mockResolvedValue(Buffer.from('version: 1'))
+    s3Service.initETLBatch.mockResolvedValue(['abc123/file1.ts'])
+    const result = await service.process({ jobId: 'job-1', data: { repository: 'https://github.com/owner/repo.git', commitId: 'abc123' } })
+    expect(result.success).toBe(false)
+    expect(result.data.filesPaths).toEqual([])
+    expect(result.message).toContain('Root policy upload failed')
   })
 
   it.each([
