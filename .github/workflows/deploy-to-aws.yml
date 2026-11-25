@@ -61,7 +61,8 @@ jobs:
         run: |
           set -euo pipefail
           image_uri="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
-          docker build --tag "$image_uri" .
+          # Lambda requiere una imagen de una sola arquitectura sin attestations.
+          docker build --platform linux/amd64 --provenance=false --tag "$image_uri" .
 
       - name: Push Lambda image
         env:

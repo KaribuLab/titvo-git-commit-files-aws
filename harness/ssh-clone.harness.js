@@ -33,7 +33,7 @@ docker;
 run--;
 rm;
 # - e;
-REPO_URL = "git@bitbucket.org:WORKSPACE/REPO.git";
+REPO_URL = "git@ssh.bitbucket.org:WORKSPACE/REPO.git";
 # - e;
 CLONE_REF = "main";
 # - e;
