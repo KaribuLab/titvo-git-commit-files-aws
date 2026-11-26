@@ -9,7 +9,7 @@ locals {
 }
 
 include {
-  path = find_in_parent_folders()
+  path = find_in_parent_folders(get_env("TG_ROOT_FILE", "root.hcl"))
 }
 
 inputs = {

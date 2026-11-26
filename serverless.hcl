@@ -4,8 +4,8 @@ locals {
   account_id    = get_env("AWS_ACCOUNT_ID", "")
   bucket_suffix = local.account_id == "" ? "" : "-${local.account_id}"
   stages = {
-    localstack = {
-      name = "Localstack"
+    local = {
+      name = "Local"
     }
     test = {
       name = "Testing"

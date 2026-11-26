@@ -2,7 +2,7 @@ import { ConfigKeys } from './config/config.key'
 
 const configuration = () => ({
   [ConfigKeys.AWS_STAGE]: process.env[ConfigKeys.AWS_STAGE] ?? 'prod',
-  [ConfigKeys.AWS_ENDPOINT]: process.env[ConfigKeys.AWS_ENDPOINT], // Puede ser opcional, para desarrollo local (LocalStack)
+  [ConfigKeys.AWS_ENDPOINT]: process.env[ConfigKeys.AWS_ENDPOINT], // Puede ser opcional, para desarrollo local (MiniStack)
 
   [ConfigKeys.AWS_REGION]: process.env[ConfigKeys.AWS_REGION] ?? 'us-east-1',
 

@@ -1,5 +1,6 @@
 import { DynamicModule, Module } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
+import { ConfigKeys } from '../config/config.key'
 import { createS3Service, S3Service } from './s3.service'
 import { createEventBridgeService, EventBridgeService } from './eventbridge'
 import { DynamoDBService, createDynamoDBService } from './dynamodb.service'
@@ -18,9 +19,9 @@ export class AwsModule {
           provide: S3Service,
           useFactory: (configService: ConfigService) =>
             createS3Service({
-              awsStage: configService.get<string>('awsStage') ?? 'prod',
-              awsEndpoint: configService.get<string>('awsEndpoint') as string,
-              awsRegion: configService.get<string>('awsRegion') as string
+              awsStage: configService.get<string>(ConfigKeys.AWS_STAGE) ?? 'prod',
+              awsEndpoint: configService.get<string>(ConfigKeys.AWS_ENDPOINT) as string,
+              awsRegion: configService.get<string>(ConfigKeys.AWS_REGION) as string
             }),
           inject: [ConfigService]
         },

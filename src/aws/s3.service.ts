@@ -32,12 +32,13 @@ export class S3Service {
 }
 
 export function createS3Service(options: S3ServiceOptions): S3Service {
-  const s3Client =
-    options.awsStage === 'local'
-      ? new S3Client({
-          region: options.awsRegion,
-          endpoint: options.awsEndpoint
-        })
-      : new S3Client()
+  // Con endpoint propio (emulador local) no hay DNS por bucket: se usa path-style.
+  const s3Client = options.awsEndpoint
+    ? new S3Client({
+        region: options.awsRegion,
+        endpoint: options.awsEndpoint,
+        forcePathStyle: true
+      })
+    : new S3Client()
   return new S3Service(s3Client)
 }
